@@ -1,0 +1,20 @@
+{
+  "name": "quickio",
+  "version": "1.0.0",
+  "description": "Framework for multiplayer io-games",
+  "main": "lib/index.js",
+  "scripts": {
+    "build": "tsc"
+  },
+  "author": "dogefromage",
+  "license": "MIT",
+  "dependencies": {
+    "@types/socket.io": "^3.0.2",
+    "socket.io": "^4.1.3"
+  },
+  "devDependencies": {
+    "@types/socket.io-client": "^3.0.0",
+    "socket.io-client": "^4.1.3",
+    "typescript": "^4.3.5"
+  }
+}
