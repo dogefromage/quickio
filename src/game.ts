@@ -1,305 +1,109 @@
-import * as io from 'socket.io-client';
-import { EventHandler } from './eventhandler';
-import { ClientData, ClientDataRequest, ClientGameObject, ClientInput, GameObjectState, GameObjectTemplate, ServerGameData } from './types';
-import { lerp } from './utils';
+import { Component, Entity } from "./entity";
+import { Renderer2d } from "./standardComponents";
 
-class ClientGOPlaceholder implements ClientGameObject
+function getTime()
 {
-    constructor(private state: GameObjectState) {}
-
-    update(dt: number) {}
-    
-    setState(state: GameObjectState) { this.state = state };
-
-    getState() { return this.state };
-
-    onServerData(serverState: GameObjectState, dataIndex: number)
-    {
-        this.state = serverState;
-    }
+    return new Date().getTime() * 0.001;
 }
 
-interface PlayerInputQueueObject
+let nextKey = function*() 
 {
-    dt: number,
-    index: number,
-    input: ClientInput,
-};
+    let i = 0;
+    while (true)
+    {
+        yield i;
+        i++;
+    }
+}();
 
-export class ClientGame extends EventHandler
+export class Game
 {
-    private lastTime = new Date().getTime() / 1000;
+    private lastTime = getTime();
 
-    private mainPlayer?: ClientGameObject;
+    private entities = new Set<Entity>();
+    private componentSystem = new Map<typeof Component, Set<Component>>();
 
-    private gameObjects = new Map<string, ClientGameObject>();
+    constructor()
+    {
+        
+    }
 
-    private dataRequestHistory = new Map<number, ClientDataRequest>();
+    subscribeComponent(componentType: typeof Component, component: Component)
+    {
+        let componentList = this.componentSystem.get(componentType);
 
-    private lastServerDataMillis = new Date().getTime();
-    private lastInputTimestamp = 0;
-    private avgServerDeltaTime = -1;
+        if (componentList === undefined)
+        {
+            componentList = new Set<Component>();
+            this.componentSystem.set(componentType, componentList);
+        }
 
-    private currentDataIndex = 0;
+        componentList.add(component);
+    }
 
-    private playerInputQueue = new Array<PlayerInputQueueObject>();
+    unsubscribeComponent(componentType: typeof Component, component: Component)
+    {
+        let componentList = this.componentSystem.get(componentType);
+
+        if (componentList !== undefined)
+        {
+            componentList.delete(component);
+        }
+    }
     
-    constructor(
-        private gameObjectTemplates: GameObjectTemplate[],
-        private inputManager: InputManager,
-        private socket: io.Socket,
-    )
+    addEntity()
     {
-        super();
+        // let key = nextKey.next().value;
 
-        this.socket.on('server-data', (jsonData, requestCallback) => 
-                this.onServerData(jsonData, requestCallback) 
-            );
+        let entity = new Entity(this);
+
+        // this.entities.set(key, entity);
+        this.entities.add(entity);
+
+        return entity;
     }
 
-    getMainPlayer()
+    removeEntity(entity: Entity)
+    // removeEntity(key: number)
     {
-        return this.mainPlayer;
-    }
-
-    *gameObjectsOfType(type: number)
-    {
-        let goType = this.gameObjectTemplates.find((el) => el.type === type);
-        if (goType === undefined)
+        this.entities.delete(entity);
+        // let entity = this.entities.get(key);
+        if (entity !== undefined)
         {
-            return;
-        }
-
-        for (let [ id, go ] of this.gameObjects)
-        {
-            if (go instanceof goType.class)
-            {
-                yield go;
-            }
+            entity.removeAllComponents();
+            // this.entities.delete(key);
         }
     }
-
-    *gameObjectsOfClass(T: any)
-    {
-        for (let [ id, go ] of this.gameObjects)
-        {
-            if (go instanceof T)
-            {
-                yield go;
-            }
-        }
-    }
-
+    
     update()
     {
-        requestAnimationFrame( () => this.update() );
+        let currentTime = getTime();
+        let dt = this.lastTime - currentTime;
 
-        //////////// TIME ////////////////
-        let currentTime = new Date().getTime() / 1000;
-        let dt = currentTime - this.lastTime;
-        this.lastTime = currentTime;
-
-        //////////// UPDATE GAMEOBJECTS ////////////////
-        for (let [ id, go ] of this.gameObjects)
+        for (let [ componentType, components ] of this.componentSystem)
         {
-            go.update(dt);
+            for (let component of components)
+            {
+                component.update(this, dt);
+            }
         }
+
+        this.lastTime = currentTime;
     }
 
-    onServerData(dataString: string, clientDataCallback: (clientData: ClientData) => void)
+    render(ctx: CanvasRenderingContext2D)
     {
-        let currentMillis = new Date().getTime();
-        let dtServer = 0.001 * (currentMillis - this.lastServerDataMillis);
-
-        if (this.avgServerDeltaTime < 0) // first call
+        let renderer2ds = this.componentSystem.get(Renderer2d);
+        if (renderer2ds !== undefined)
         {
-            this.avgServerDeltaTime = dtServer;
-        }
-        else
-        {
-            // rolling average
-            this.avgServerDeltaTime = lerp(this.avgServerDeltaTime, dtServer, 0.2);
-        }
-
-        // safety
-        if (this.avgServerDeltaTime === 0) this.avgServerDeltaTime = 0.1;
-        
-        /**
-         * clientdataObject which will be sent back to the server
-         */
-        this.currentDataIndex++;
-
-        let clientData: ClientData = 
-        {
-            ix: this.currentDataIndex,
-            // in: inputManager.getAxesDelta(this.lastInputBufferIndex)
-            in: this.inputManager.getNew(this.lastInputTimestamp),
-        };
-
-        if (this.mainPlayer !== undefined)
-        {
-            // this.mainPlayer.saveState?.(dtServer, clientData.ix, clientData.in);
-            let state: PlayerInputQueueObject = 
+            for (let component of renderer2ds)
             {
-                dt: dtServer,
-                index: clientData.ix,
-                input: clientData.in,
-            };
-            
-            this.playerInputQueue.push(state);
-        }
-        this.lastInputTimestamp = this.inputManager.getCurrentIndex();
-
-
-        // save all ids for later use
-        let allClientIds = new Set<string>();
-        for (let [ id, go ] of this.gameObjects)
-        {
-            allClientIds.add(id);
-        }
-
-        let serverData = <ServerGameData>JSON.parse(dataString);
-
-        ////////////// ANSWER REQUEST //////////////
-        if (serverData.in !== undefined || serverData.ex !== undefined)
-        {
-            let dataRequest = this.dataRequestHistory.get(serverData.ix);
-            if (dataRequest !== undefined)
-            {
-                ////////////// INFORMATION FOR CREATING NEW OBJECTS //////////////
-                if (serverData.in !== undefined)
-                {
-                    for (let i = 0; i < serverData.in.length; i++)
-                    {
-                        let id = dataRequest.in[i];
-                        let info = serverData.in[i];
-
-                        let goType = Number(info.shift());
-                        let goTemplate = this.gameObjectTemplates.find((el) => el.type === goType);
-
-                        if (goTemplate === undefined) continue;
-
-                        let newGo = new goTemplate.class(...info);
-
-                        if (newGo !== undefined)
-                        {
-                            // remove old
-                            let oldGo = this.gameObjects.get(id);
-                            if (oldGo !== undefined)
-                            {
-                                if (oldGo instanceof ClientGOPlaceholder)
-                                {
-                                    newGo.setState(oldGo.getState());
-                                }
-                                oldGo.onDeath?.();
-                                oldGo.onUnload?.();
-                                this.gameObjects.delete(id);
-                            }
-
-                            // add go
-                            this.gameObjects.set(id, newGo);
-
-                            if (id === this.socket.id)
-                            {
-                                this.mainPlayer = newGo;
-                            }
-                        }
-                    }
-                }
-    
-                ////////////// DELETION OF OLD OBJECTS //////////////
-                if (serverData.ex !== undefined)
-                {
-                    for (let i = 0; i < serverData.ex.length; i++)
-                    {
-                        let id = dataRequest.ex[i];
-                        let isStillExisting = serverData.ex[i];
-    
-                        if (isStillExisting === 0)
-                        {
-                            // remove gameobject
-                            let go = this.gameObjects.get(id);
-    
-                            if (go !== undefined)
-                            {
-                                go.onDeath?.();
-                                go.onUnload?.();
-
-                                this.gameObjects.delete(id);
-                                allClientIds.delete(id);
-
-                                if (id === this.socket.id)
-                                {
-                                    this.mainPlayer = undefined;
-                        
-                                    this.dispatchEvent('death', {} );
-                                }
-                            }
-                        }
-                    }
-                }
-    
-                this.dataRequestHistory.delete(serverData.ix);
-            }
-            else
-            {
-                console.error("QuickIO: No match on client found for servers request answer.");
+                (<Renderer2d>component).render(ctx);
             }
         }
 
-        let newRequest: ClientDataRequest = 
-        {
-            in: [],
-            ex: [],
-        };
-
-        ////////////// GAMEOBJECTS //////////////
-        if (serverData.go !== undefined)
-        {
-            for (let [ id, goState ] of serverData.go)
-            {
-                let go = this.gameObjects.get(id);
-
-                if (go === undefined)
-                {
-                    /**
-                     * doesn't know obj, ask for information with request
-                     * & create dummy obj
-                     */
-                    newRequest.in.push(id);
-
-                    const dummy = new ClientGOPlaceholder(goState);
-                    this.gameObjects.set(id, dummy);
-                }
-                else
-                {
-                    go.onServerData(goState, serverData.ix, this.avgServerDeltaTime);
-                }
-
-                allClientIds.delete(id);
-            }
-        }
-
-        /**
-         * server hasn't sent any information about these ids,
-         * ask if their objects still exist
-         */
-        for (let id of allClientIds)
-        {
-            newRequest.ex.push(id);
-        }
-
-        if (newRequest.in.length > 0 || newRequest.ex.length > 0)
-        {
-            // request has data, therefore save and attach to clientData
-            this.dataRequestHistory.set(this.currentDataIndex, newRequest);
-
-            clientData.re = newRequest;
-        }
-
-        // send back clientData to server
-        clientDataCallback(clientData);
-
-        this.lastServerDataMillis = currentMillis;
     }
 }
+
+
+
