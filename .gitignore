@@ -1,5 +1,7 @@
 lib/
 
+package-lock.json
+
 # Logs
 logs
 *.log

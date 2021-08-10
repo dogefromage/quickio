@@ -1,5 +1,5 @@
 import { Component, Entity } from "../entity";
-import { Vector2 } from "../vector";
+import { Vector2 } from 'quickio-math';
 
 export class Transform2d extends Component
 {
@@ -9,13 +9,9 @@ export class Transform2d extends Component
         return this._position;
     }
     
-    private _rotation = new Vector2();
-    get rotation()
-    {
-        return this._rotation;
-    }
+    public rotation = 0;
     
-    private _scale = new Vector2(1, 1);
+    private _scale = new Vector2([ 1, 1 ]);
     get scale()
     {
         return this._scale;
