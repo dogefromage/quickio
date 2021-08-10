@@ -1,5 +1,5 @@
 import { Component, Entity } from "./entity";
-import { Renderer2d } from "./standardComponents";
+import { Renderer2d } from "./components/renderer";
 
 function getTime()
 {

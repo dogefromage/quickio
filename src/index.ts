@@ -3,8 +3,9 @@ export { Entity, Component } from './entity';
 
 export { Game } from './game';
 
-export { Transform2d, Renderer2d } from './standardComponents';
-
 export { Vector2, Vector3 } from './vector';
+
+export { Renderer2d } from './components/renderer'
+export { Transform2d } from './components/transform';
 
 export { InputManager, Keys } from './inputManager';
