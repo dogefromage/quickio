@@ -11,49 +11,96 @@ interface Key
 
 function getTime()
 {
-    return 0.001 * new Date().getTime();
+    return new Date().getTime() * 0.001;
 }
 
 export class InputManager
 {
-    private keys = new Map<string, Key>();
+    private channels: InputChannel[] = [];
 
     constructor()
     {
         addEventListener('keydown', (e: KeyboardEvent) =>
         {
-            let key = this.keys.get(e.code);
-
-            if (key === undefined)
+            for (let channel of this.channels)
             {
-                key = 
-                {
-                    timeWhenPressed: 0,
-                    downTime: 0,
-                    pressed: false,
-                };
+                channel.setKeyDown(e.code);
             }
-                
-            key.timeWhenPressed = getTime();
-            key.pressed = true;
-
-            this.keys.set(e.code, key);
         });
 
         addEventListener('keyup', (e: KeyboardEvent) =>
         {
-            let key = this.keys.get(e.code);
-
-            if (key !== undefined)
+            for (let channel of this.channels)
             {
-                key.pressed = false;
-
-                key.downTime = getTime() - key.timeWhenPressed;
-
-                this.keys.set(e.code, key);
-            };
-
+                channel.setKeyUp(e.code);
+            }
         });
+    }
+    
+    createChannel()
+    {
+        let channel = new InputChannel();
+        this.channels.push(channel);
+        return channel;
+    }
+
+    deleteChannel(channel: InputChannel)
+    {
+        this.channels = this.channels.filter((c) => c != channel);
+    }
+
+    clearAllChannels()
+    {
+        this.channels = [];
+    }
+}
+
+export class InputChannel
+{
+    private keys = new Map<string, Key>();
+
+    constructor()
+    {
+
+    }
+
+    /** @internal */
+    setKeyDown(code: string)
+    {
+        let key = this.keys.get(code);
+
+        if (key === undefined)
+        {
+            key = 
+            {
+                timeWhenPressed: 0,
+                downTime: 0,
+                pressed: false,
+            };
+        }
+
+        if ( !key.pressed )
+        {
+            key.timeWhenPressed = getTime();
+            key.pressed = true;
+
+            this.keys.set(code, key);
+        }
+    }
+
+    /** @internal */
+    setKeyUp(code: string)
+    {
+        let key = this.keys.get(code);
+
+        if (key !== undefined)
+        {
+            key.pressed = false;
+
+            key.downTime = getTime() - key.timeWhenPressed;
+
+            this.keys.set(code, key);
+        };
     }
 
     isKeyPressed(code: string)
@@ -78,11 +125,15 @@ export class InputManager
                 let currTime = getTime();
                 let partialDownTime = currTime - key.timeWhenPressed;
                 key.timeWhenPressed = currTime;
+                
                 return partialDownTime;
             }
             else
             {
-                return key.downTime;
+                let downTime = key.downTime;
+                key.downTime = 0;
+                
+                return downTime;
             }
         }
     }

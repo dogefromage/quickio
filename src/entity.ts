@@ -3,13 +3,19 @@ import { Game } from "./game";
 export class Component
 {
     constructor(
-        public parent: Entity
+        public game: Game,
+        public entity: Entity
         )
     {
 
     }
 
-    update(game: Game, dt: number)
+    start()
+    {
+        
+    }
+
+    update()
     {
         
     }
@@ -45,7 +51,8 @@ export class Entity
 
         if (c === undefined)
         {
-            c = <Component>new componentType(this);
+            c = <Component>new componentType(this.game, this);
+            c.start();
             
             this.game.subscribeComponent(componentType, c);
             

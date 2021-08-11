@@ -6,13 +6,13 @@ export type RenderRule = (ctx: CanvasRenderingContext2D) => void;
 export class Renderer2d extends Component
 {
     private renderRules: RenderRule[] = [];
-
-    constructor(parent: Entity)
+    
+    start()
     {
-        super(parent);
+        
     }
 
-    update(game: Game, dt: number)
+    update()
     {
         
     }
@@ -25,7 +25,7 @@ export class Renderer2d extends Component
         }
     }
 
-    addRenderRule(rule: RenderRule)
+    addRenderStep(rule: RenderRule)
     {
         this.renderRules.push(rule);
     }

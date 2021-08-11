@@ -16,11 +16,4 @@ export class Transform2d extends Component
     {
         return this._scale;
     }
-
-    constructor(
-        parent: Entity
-    )
-    {
-        super(parent);
-    }
 }
