@@ -7,3 +7,5 @@ export { Renderer2d } from './components/renderer'
 export { Transform2d } from './components/transform';
 
 export { InputChannel, InputManager,Keys } from './inputManager';
+
+export { RigidBody2d } from './components/rigidbody';

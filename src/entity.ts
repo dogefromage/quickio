@@ -33,25 +33,20 @@ export class Entity
         
     }
 
-    private _components = new Map<typeof Component, Component>();
-    get components()
+    private components = new Map<typeof Component, Component>();
+
+    getComponent<T extends Component>(componentType: new (game: Game, entity: Entity) => T)
     {
-        return this._components;
+        return <T>this.components.get(componentType);
     }
 
-    getComponent(componentType: typeof Component)
+    addComponent<T extends Component>(componentType: new (game: Game, entity: Entity) => T)
     {
-        return this.components.get(componentType);
-    }
-
-    addComponent(componentType: typeof Component)
-    {
-        
         let c = this.components.get(componentType);
 
         if (c === undefined)
         {
-            c = <Component>new componentType(this.game, this);
+            c = new componentType(this.game, this);
             c.start();
             
             this.game.subscribeComponent(componentType, c);
@@ -59,10 +54,10 @@ export class Entity
             this.components.set(componentType, c);
         }
 
-        return c;
+        return <T>c;
     }
 
-    removeComponent(componentType: any)
+    removeComponent<T extends Component>(componentType: new (game: Game, entity: Entity) => T)
     {
         let c = this.components.get(componentType);
 

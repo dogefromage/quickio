@@ -2,16 +2,17 @@ import { Component, Entity } from "./entity";
 import { Renderer2d } from "./components/renderer";
 import { InputChannel, InputManager } from "./inputManager";
 import { Transform2d } from "./components/transform";
+import { Vector2 } from "quickio-math";
 
-let nextKey = function*() 
-{
-    let i = 0;
-    while (true)
-    {
-        yield i;
-        i++;
-    }
-}();
+// let nextKey = function*() 
+// {
+//     let i = 0;
+//     while (true)
+//     {
+//         yield i;
+//         i++;
+//     }
+// }();
 
 function getTime()
 {
@@ -20,11 +21,11 @@ function getTime()
 
 export class Game
 {
+    // time
     private lastTime: number;
     private startTime: number;
     private _frameCount: number;
     private _deltaTime: number;
-
     get deltaTime()
     {
         return this._deltaTime;
@@ -36,6 +37,16 @@ export class Game
     get gameTime()
     {
         return getTime() - this.startTime;
+    }
+
+    // constants
+    private _constants = 
+    {
+        g: new Vector2([ 0, 10 ]),
+    };
+    get constants()
+    {
+        return this._constants;
     }
 
     private entities = new Set<Entity>();
@@ -68,6 +79,7 @@ export class Game
         this.defaultComponents = defaultComponentList;
     }
 
+    /** @internal */
     subscribeComponent(componentType: typeof Component, component: Component)
     {
         let componentList = this.componentSystem.get(componentType);
@@ -81,6 +93,7 @@ export class Game
         componentList.add(component);
     }
 
+    /** @internal */
     unsubscribeComponent(componentType: typeof Component, component: Component)
     {
         let componentList = this.componentSystem.get(componentType);
@@ -136,11 +149,15 @@ export class Game
         let renderer2ds = this.componentSystem.get(Renderer2d);
         if (renderer2ds !== undefined)
         {
-            for (let component of renderer2ds)
+            for (let r2d of renderer2ds)
             {
-                (<Renderer2d>component).render(ctx);
+                if (r2d instanceof Renderer2d)
+                {
+                    r2d.render(ctx);
+                }
             }
         }
 
     }
 }
+1
