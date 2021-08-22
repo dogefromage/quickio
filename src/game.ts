@@ -221,14 +221,7 @@ export class Game2d
 
         for (let r2d of r2dsList)
         {
-            let m = r2d.transform.transformationMatrix.all();
-
-            ctx.save();
-            ctx.transform(m[0], m[3], m[1], m[4], m[2], m[5]);
-            
             r2d.render(ctx);
-
-            ctx.restore();
         }
     }
 }
