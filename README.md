@@ -7,7 +7,7 @@
 <p>
 <p>
 
-Hello user, <p>  
+## Hello user, <p>  
 
 Quickio is a javascript/typescript game engine which runs inside of the browser. It is based on an [entity-component-system](https://en.wikipedia.org/wiki/Entity_component_system) like Unity3d. If you are already experienced in unity, quickio should be no problem for you. In the future, I am aiming to make quickio into a multiplayer engine to make it an easy way to create your own io-style game.
 
