@@ -3,23 +3,15 @@ import { Renderer2d } from "./components/renderer";
 import { InputChannel, InputManager } from "./inputManager";
 import { Transform2d } from "./components/transform";
 import { Vector2 } from "quickio-math";
-
-// let nextKey = function*() 
-// {
-//     let i = 0;
-//     while (true)
-//     {
-//         yield i;
-//         i++;
-//     }
-// }();
+import { request } from "http";
+import { RigidBody2d } from "./components/rigidbody";
 
 function getTime()
 {
     return new Date().getTime() * 0.001;
 }
 
-export class Game
+export class Game2d
 {
     // time
     private lastTime: number;
@@ -56,6 +48,10 @@ export class Game
     
     private inputManager = new InputManager();
 
+    private renderingContext?: CanvasRenderingContext2D;
+
+    private isRunning = false;
+
     constructor()
     {
         this.startTime = this.lastTime = getTime();
@@ -77,6 +73,28 @@ export class Game
     setDefaultComponents(defaultComponentList: (typeof Component)[])
     {
         this.defaultComponents = defaultComponentList;
+    }
+
+    setRenderingContext(ctx: CanvasRenderingContext2D)
+    {
+        this.renderingContext = ctx;
+    }
+
+    clearRenderingContext()
+    {
+        this.renderingContext = undefined;
+    }
+
+    start()
+    {
+        this.isRunning = true;
+        this.lastTime = getTime();
+        requestAnimationFrame(() => { this.update() });
+    }
+
+    stop()
+    {
+        this.isRunning = false;
     }
 
     /** @internal */
@@ -103,16 +121,25 @@ export class Game
             componentList.delete(component);
         }
     }
+    /** @internal */
+    getAllComponentsOfType<T extends Component>(componentType: new (game: Game2d, entity: Entity) => T)
+    {
+        let res = this.componentSystem.get(componentType);
+        if (res === undefined)
+        {
+            res = new Set<T>();
+        }
+        return <Set<T>>res;
+    }
     
     addEntity()
     {
         let entity = new Entity(this);
 
-        for (let c of this.defaultComponents)
+        for (let i = 0; i < this.defaultComponents.length; i++)
         {
-            entity.addComponent(c);
+            entity.addComponent(this.defaultComponents[i]);
         }
-
         this.entities.add(entity);
 
         return entity;
@@ -126,38 +153,93 @@ export class Game
             entity.removeAllComponents();
         }
     }
-    
+
+    physics()
+    {
+        let rigidbody2ds = this.getAllComponentsOfType(RigidBody2d);
+
+        for (const r of rigidbody2ds)
+        {
+            r.update();
+        }
+    }
+
     update()
     {
         let currentTime = new Date().getTime() * 0.001;
         this._deltaTime = this.lastTime - currentTime;
 
+        ///////////////////// PHYSICS UPDATE /////////////////////
+        this.physics();
+
+        ///////////////////// GENERAL UPDATE /////////////////////
         for (let [ componentType, components ] of this.componentSystem)
         {
+            if (componentType === RigidBody2d)
+            {
+                continue;
+            }
+
             for (let component of components)
             {
                 component.update();
             }
         }
 
+        ///////////////////// RENDERING /////////////////////
+        if (this.renderingContext === undefined)
+        {
+            warnNoCtx();
+        }
+        else
+        {
+            this.render(this.renderingContext);
+        }
+
         this.lastTime = currentTime;
         this._frameCount++;
+
+        if (this.isRunning)
+        {
+            requestAnimationFrame(() => { this.update() });
+        }
     }
 
     render(ctx: CanvasRenderingContext2D)
     {
-        let renderer2ds = this.componentSystem.get(Renderer2d);
-        if (renderer2ds !== undefined)
+        let renderer2ds = this.getAllComponentsOfType(Renderer2d);
+
+        let r2dsList = [];
+
+        for (let r2d of renderer2ds)
         {
-            for (let r2d of renderer2ds)
-            {
-                if (r2d instanceof Renderer2d)
-                {
-                    r2d.render(ctx);
-                }
-            }
+            r2dsList.push(r2d);
         }
 
+        // sort by depth
+        r2dsList = r2dsList.sort((a, b) => a.zDepth - b.zDepth);
+
+        for (let r2d of r2dsList)
+        {
+            let m = r2d.transform.transformationMatrix.all();
+
+            ctx.save();
+            ctx.transform(m[0], m[3], m[1], m[4], m[2], m[5]);
+            
+            r2d.render(ctx);
+
+            ctx.restore();
+        }
     }
 }
-1
+
+
+let hasWarnedCtx = false;
+function warnNoCtx()
+{
+    if (!hasWarnedCtx)
+    {
+        console.warn('No rendering context is set on the main game object. Use setRenderingContext() to set the CanvasRenderingContext2d of your html5 canvas');
+        hasWarnedCtx = true;
+    }
+}

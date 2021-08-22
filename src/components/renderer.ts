@@ -1,15 +1,18 @@
-import { Component, Entity } from "../entity";
-import { Game } from "../game";
+import { Component } from "../entity";
+import { Transform2d } from "./transform";
 
 export type RenderRule = (ctx: CanvasRenderingContext2D) => void;
 
 export class Renderer2d extends Component
 {
+    public zDepth = 0;
+    
     private renderRules: RenderRule[] = [];
+    public transform!: Transform2d;
     
     start()
     {
-        
+        this.transform = this.entity.getComponent(Transform2d);
     }
 
     update()

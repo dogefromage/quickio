@@ -1,6 +1,6 @@
 import { Transform2d } from "./transform";
 import { Component, Entity } from "../entity";
-import { Game } from "../game";
+import { Game2d } from "../game";
 import { Vector2 } from "quickio-math";
 
 export class RigidBody2d extends Component
