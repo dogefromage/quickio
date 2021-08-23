@@ -109,7 +109,7 @@ class MovePlayer extends quick.Component
 	* after the name to tell typescript that this property will not be
 	* assigned inside of the constructor.
 	*/ 
-	public transform!: Transform2d;
+	private transform!: Transform2d;
 	
 	start()
 	{
