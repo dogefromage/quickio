@@ -1,11 +1,7 @@
 import { Component } from "../entity";
 import { Shape2d, PrimitiveShapes } from "../shapes";
+import { hexColorToStringColor } from "../utils";
 import { Transform2d } from "./transform";
-
-function colorToString(hexColor: number)
-{
-    return "#" + hexColor.toString(16);
-}
 
 export class RenderStyle2d
 {
@@ -43,19 +39,29 @@ export class RenderStyle2d
         this._lineWidth = width;
         return this;
     }
-    
-    apply(ctx: CanvasRenderingContext2D)
+
+    loadStyle(ctx: CanvasRenderingContext2D)
     {
         if (this._fill)
         {
-            ctx.fillStyle = colorToString(this._fillColor);
+            ctx.fillStyle = hexColorToStringColor(this._fillColor);
+        }
+        
+        if (this._stroke)
+        {
+            ctx.strokeStyle = hexColorToStringColor(this._strokeColor);
+            ctx.lineWidth = this._lineWidth;
+        }
+    }
+    
+    applyStyle(ctx: CanvasRenderingContext2D)
+    {
+        if (this._fill)
+        {
             ctx.fill();
         }
         if (this._stroke)
         {
-            ctx.strokeStyle = colorToString(this._strokeColor);
-            ctx.lineWidth = this._lineWidth;
-            
             ctx.stroke();
         }
     }
@@ -93,6 +99,8 @@ export class Renderer2d extends Component
             {
                 let [ shape, style ] = step;
 
+                style.loadStyle(ctx);
+                
                 ctx.beginPath();
 
                 if (shape instanceof PrimitiveShapes.Circle)
@@ -123,7 +131,7 @@ export class Renderer2d extends Component
                     ctx.closePath();
                 }
                 
-                style.apply(ctx);
+                style.applyStyle(ctx);
             }
         }
     }
@@ -142,6 +150,7 @@ export class Renderer2d extends Component
             this.renderSteps.push([ args[0], args[1] ]);
         }
     }
+
     clearAllRenderSteps()
     {
         this.renderSteps = [];

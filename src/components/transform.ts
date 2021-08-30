@@ -77,7 +77,7 @@ export class Transform2d extends Component
         return this._transformationMatrix.multiplyVec2(point);
     }
 
-    untransformPoint(point: Vector2)
+    inverseTransformPoint(point: Vector2)
     {
         let inv = this._transformationMatrix.inverse();
         if (inv !== undefined)
@@ -98,7 +98,7 @@ export class Transform2d extends Component
         return mat2.multiplyVec2(direction);
     }
 
-    untransformDirection(direction: Vector2)
+    inverseTransformDirection(direction: Vector2)
     {
         let m = this._transformationMatrix.all();
         let mat2 = new Matrix2([

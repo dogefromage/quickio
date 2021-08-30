@@ -12,7 +12,8 @@ export { PrimitiveShapes, CustomShape2d } from './shapes';
 export { InputChannel, InputManager,Keys } from './inputManager';
 
 // PHYSICS
-export { RigidBody2d } from './components/rigidbody';
+export { RigidBody2d } from './physics2d/rigidbody';
+export { CircleCollider } from './physics2d/collider';
 
 // MATH
 export { Vector2, Vector3, Vector4, Matrix2, Matrix3, Matrix4, Quaternion } from 'quickio-math';

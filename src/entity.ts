@@ -2,6 +2,15 @@ import { Game2d } from "./game";
 
 export class Component
 {
+    private _isAttachedToEntity = true;
+    /**
+     * This property will get set to false after the component has been removed from its entity. If your component is referenced somewhere else, it may be useful to check if the component is still attached.
+     */
+    get isAttachedToEntity()
+    {
+        return this._isAttachedToEntity;
+    }
+
     constructor(
         public game: Game2d,
         public entity: Entity
@@ -24,14 +33,31 @@ export class Component
     {
 
     }
-}
 
-class ComponentError extends Error
-{
-    constructor(msg: string)
+    getComponent<T extends Component>(componentType: new (game: Game2d, entity: Entity) => T)
     {
-        super(msg);
-        this.name = 'ComponentError';
+        return this.entity.getComponent(componentType);
+    }
+
+    hasComponent<T extends Component>(componentType: new (game: Game2d, entity: Entity) => T)
+    {
+        return this.entity.hasComponent(componentType);
+    }
+
+    addComponent<T extends Component>(componentType: new (game: Game2d, entity: Entity) => T)
+    {
+        return this.entity.addComponent(componentType);
+    }
+
+    removeComponent<T extends Component>(componentType: new (game: Game2d, entity: Entity) => T)
+    {
+        return this.entity.removeComponent(componentType);
+    }
+
+    /** @internal */
+    onDestroyInternal()
+    {
+        this._isAttachedToEntity = false;
     }
 }
 
@@ -54,7 +80,22 @@ export class Entity
             }
         }
 
-        throw new ComponentError(`Component ${componentType.name} was not found on entity! Use addComponent to create a new one or check you order of execution. This function could have run before the component was attached to this entity.`);
+        console.error(`Component ${componentType.name} was not found on entity! Use addComponent() to create a new one or use hasComponent() to check its existence beforehand. This function could have also run before the component was attached to this entity, so check your order of execution.`)
+
+        return <T><unknown>undefined;
+    }
+
+    hasComponent<T extends Component>(componentType: new (game: Game2d, entity: Entity) => T)
+    {
+        for (let i = 0; i < this.components.length; i++)
+        {
+            if (this.components[i] instanceof componentType)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     addComponent<T extends Component>(componentType: new (game: Game2d, entity: Entity) => T)
@@ -91,8 +132,9 @@ export class Entity
             if (this.components[i] instanceof componentType)
             {
                 let c = this.components.splice(i, 1)[0];
-
                 c.onDestroy();
+                c.onDestroyInternal();
+
                 this.game.unsubscribeComponent(componentType, c);
 
                 return true;
@@ -108,6 +150,7 @@ export class Entity
         {
             let c = this.components[i];
             c.onDestroy();
+            c.onDestroyInternal();
             
             // should work???
             let constructorFunction = Object.getPrototypeOf(c).constructor;
