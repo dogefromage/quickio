@@ -58,11 +58,8 @@ export default class Entity
             if (this.components[i] instanceof componentType)
             {
                 let c = this.components.splice(i, 1)[0];
-                c.onDestroy();
-                c._isAttachedToEntity = false;
-
                 this.ecs.unsubscribeComponent(componentType, c);
-
+                c.dispose();
                 return true;
             }
         }
@@ -70,12 +67,12 @@ export default class Entity
         return false;
     }
 
-    removeAllComponents()
+    dispose()
     {
         for (let i = 0; i < this.components.length; i++)
         {
             let c = this.components[i];
-            c.onDestroyInternal();
+            c.dispose();
             
             // should work???
             let constructorFunction = Object.getPrototypeOf(c).constructor;

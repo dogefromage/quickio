@@ -19,6 +19,8 @@ function isSerializable(value: SerializableType)
     return typeof(value) === 'number' || typeof(value) === 'string';
 }
 
+type ComponentState = SerializableType[];
+
 type SyncProperty = string | ( () => SerializableType[] );
 
 const PLACEHOLDER: SerializableType[] = [];
@@ -65,15 +67,6 @@ export type ComponentClass<T extends Component = Component> =
 
 export default class Component
 {
-    private _isAttachedToEntity = true;
-    /**
-     * This property will get set to false after the component has been removed from its entity. If your component is referenced somewhere else, it may be useful to check if the component is still attached.
-     */
-    get isAttachedToEntity()
-    {
-        return this._isAttachedToEntity;
-    }
-
     /** @internal */
     hasRunStart = false;
 
@@ -104,6 +97,12 @@ export default class Component
 
     onDestroy() {}
 
+    /** @internal */
+    dispose()
+    {
+        this.onDestroy();
+    }
+
     syncState(syncProperty: SyncProperty)
     {
         if (this.hasRunStart)
@@ -120,9 +119,9 @@ export default class Component
      * 
      * @returns Array of serialized sync vars
      */
-    getState()
+    getState(): ComponentState
     {
-        let state: SerializableType[] = [];
+        let state: ComponentState = [];
 
         for (const prop of this.syncProperties)
         {
@@ -219,7 +218,7 @@ export default class Component
     /** @internal */
     addStateToBuffer()
     {
-
+        
     }
 
     /**

@@ -31,16 +31,16 @@ export abstract class ECS
         for (const componentItem of componentList)
         {
             let componentClass = <ComponentClass>componentItem;
-            let options = {};
+            let options: ComponentOptions = {};
 
             if (Array.isArray(componentItem))
             {
                 componentClass = componentItem[0];
-                options = componentItem[1] || {};
+                options = componentItem[1] || options;
             }
 
             const {
-                isDefault
+                isDefault = false
             } = options;
 
             if (!(componentClass.prototype instanceof Component))
@@ -54,6 +54,11 @@ export abstract class ECS
                 instances: new Set(),
                 options,
             });
+            
+            if (isDefault)
+            {
+                this.defaultComponents.push(componentClass);
+            }
         }
     }
 
@@ -70,7 +75,7 @@ export abstract class ECS
     // setDefaultComponents(defaultComponentList: (typeof Component)[])
     // {
     //     this.defaultComponents = defaultComponentList;
-    // }return row;
+    // }
 
     /** @internal */
     getRowIndexFromType(componentClass: ComponentClass)
@@ -79,19 +84,17 @@ export abstract class ECS
         {
             return row.componentClass === componentClass;
         });
-
         return index;
     }
 
     /** @internal */
     getRowFromType(componentClass: ComponentClass)
     {
-        const find = this.components.find(row =>
+        const row = this.components.find(row =>
         {
             return row.componentClass === componentClass;
         });
-
-        return find;
+        return row;
     }
 
     /** @internal */
@@ -144,24 +147,22 @@ export abstract class ECS
         return entity;
     }
 
-    removeEntity(entity: Entity)
+    removeEntity(id: string)
     {
-        if (entity !== undefined)
-        {
-            this.entities.delete(entity);
-            entity.removeAllComponents();
-        }
+        let entity = this.entities.get(id);
+        if (entity == null) return false;
+
+        entity.dispose();
+        this.entities.delete(id);
+        return true;
     }
 
     update()
     {
         // start
-        for (let i = 0; i < this.componentList.length; i++)
+        for (const componentRow of this.components)
         {
-            // let componentType = this.componentList[i];
-            let componentSet = this.componentSets[i];
-
-            for (let component of componentSet)
+            for (let component of componentRow.instances)
             {
                 if (!component.hasRunStart)
                 {
@@ -172,12 +173,9 @@ export abstract class ECS
         }
 
         // update
-        for (let i = 0; i < this.componentList.length; i++)
+        for (const componentRow of this.components)
         {
-            // let componentType = this.componentList[i];
-            let componentSet = this.componentSets[i];
-
-            for (let component of componentSet)
+            for (let component of componentRow.instances)
             {
                 component.update();
             }
