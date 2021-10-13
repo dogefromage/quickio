@@ -1,131 +1,57 @@
-import { Game2d } from "./game";
+import Component from './component';
+import { ECS } from './ecs';
 
-export class Component
+export default class Entity
 {
-    private _isAttachedToEntity = true;
-    /**
-     * This property will get set to false after the component has been removed from its entity. If your component is referenced somewhere else, it may be useful to check if the component is still attached.
-     */
-    get isAttachedToEntity()
-    {
-        return this._isAttachedToEntity;
-    }
+    private components: Component[] = [];
+    
+    get id() { return this._id; }
 
     constructor(
-        public game: Game2d,
-        public entity: Entity
-        )
-    {
-
-    }
-
-    start()
+        private ecs: ECS,
+        private _id: string
+    )
     {
         
     }
 
-    update()
+    getComponent<T extends Component>(componentType: typeof Component)
     {
-        
-    }
-
-    onDestroy()
-    {
-
-    }
-
-    getComponent<T extends Component>(componentType: new (game: Game2d, entity: Entity) => T)
-    {
-        return this.entity.getComponent(componentType);
-    }
-
-    hasComponent<T extends Component>(componentType: new (game: Game2d, entity: Entity) => T)
-    {
-        return this.entity.hasComponent(componentType);
-    }
-
-    addComponent<T extends Component>(componentType: new (game: Game2d, entity: Entity) => T)
-    {
-        return this.entity.addComponent(componentType);
-    }
-
-    removeComponent<T extends Component>(componentType: new (game: Game2d, entity: Entity) => T)
-    {
-        return this.entity.removeComponent(componentType);
-    }
-
-    /** @internal */
-    onDestroyInternal()
-    {
-        this._isAttachedToEntity = false;
-    }
-}
-
-export class Entity
-{
-    constructor(private game: Game2d)
-    {
-        
-    }
-
-    private components: Component[] = [];
-
-    getComponent<T extends Component>(componentType: new (game: Game2d, entity: Entity) => T)
-    {
-        for (let i = 0; i < this.components.length; i++)
+        for (const component of this.components)
         {
-            if (this.components[i] instanceof componentType)
+            if (component instanceof componentType)
             {
-                return <T>this.components[i];
+                return component;
             }
         }
 
         console.error(`Component ${componentType.name} was not found on entity! Use addComponent() to create a new one or use hasComponent() to check its existence beforehand. This function could have also run before the component was attached to this entity, so check your order of execution.`)
-
-        return <T><unknown>undefined;
     }
 
-    hasComponent<T extends Component>(componentType: new (game: Game2d, entity: Entity) => T)
+    hasComponent<T extends Component>(componentType: typeof Component)
     {
-        for (let i = 0; i < this.components.length; i++)
-        {
-            if (this.components[i] instanceof componentType)
-            {
-                return true;
-            }
-        }
-
-        return false;
+        return this.getComponent(componentType) != null;
     }
 
-    addComponent<T extends Component>(componentType: new (game: Game2d, entity: Entity) => T)
+    addComponent<T extends Component>(componentType: typeof Component)
     {
-        let c: any;
-        for (let i = 0; i < this.components.length; i++)
-        {
-            if (this.components[i] instanceof componentType)
-            {
-                c = this.components[i];
-            }
-        }
-
-        if (c === undefined)
-        {
-            // create new component
-            c = new componentType(this.game, this);
-            c.start();
-            this.game.subscribeComponent(componentType, c);
-            this.components.push(c);
-        }
-        else
+        let c = this.getComponent(componentType);
+        if (c != null)
         {
             console.warn(`Component ${componentType.name} has already been added to this entity. The previous component will be returned.`);
+            return c;
         }
 
-        return <T>c;
+        // create new component
+        c = new componentType(this.ecs, this);
+        c.awake();
+        this.ecs.subscribeComponent(componentType, c);
+        this.components.push(c);
+
+        return c;
     }
 
-    removeComponent<T extends Component>(componentType: new (game: Game2d, entity: Entity) => T)
+    removeComponent<T extends Component>(componentType: typeof Component)
     {
         for (let i = 0; i < this.components.length; i++)
         {
@@ -133,9 +59,9 @@ export class Entity
             {
                 let c = this.components.splice(i, 1)[0];
                 c.onDestroy();
-                c.onDestroyInternal();
+                c._isAttachedToEntity = false;
 
-                this.game.unsubscribeComponent(componentType, c);
+                this.ecs.unsubscribeComponent(componentType, c);
 
                 return true;
             }
@@ -149,12 +75,11 @@ export class Entity
         for (let i = 0; i < this.components.length; i++)
         {
             let c = this.components[i];
-            c.onDestroy();
             c.onDestroyInternal();
             
             // should work???
             let constructorFunction = Object.getPrototypeOf(c).constructor;
-            this.game.unsubscribeComponent(constructorFunction, c);
+            this.ecs.unsubscribeComponent(constructorFunction, c);
         }
 
         this.components = [];

@@ -4,12 +4,9 @@
   "description": "Framework for multiplayer io-games",
   "main": "lib/index.js",
   "keywords": [
-    "game",
-    "engine",
+    "ecs",
     "web",
     "io",
-    "2d",
-    "3d",
     "typescript"
   ],
   "scripts": {

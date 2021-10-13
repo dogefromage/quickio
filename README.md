@@ -1,4 +1,48 @@
 
+
+
+
+
+
+```ts
+
+
+
+
+
+
+
+
+class Component
+{
+    Entity entity
+    ECS ecs
+}
+
+class Entity
+{
+    string id
+    List<Component> components
+}
+
+type ComponentRow<T extends Component> = {
+    component: new (...any[]) => T;
+    instances: Set<T>;
+    options?: {}    
+}
+
+class ECS
+{
+    List<ComponentRow> components
+    Map<id, Entity> entities
+    
+}
+
+```
+
+
+
+
   
 
 # quickio

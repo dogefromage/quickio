@@ -1,5 +1,7 @@
 lib/
 
+.replit
+
 package-lock.json
 
 # Logs

@@ -2,7 +2,7 @@
 import { Key as Keys } from 'ts-key-enum';
 export { Keys };
 
-interface Key
+type Key =
 {
     timeWhenPressed: number;
     downTime: number;
