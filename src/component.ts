@@ -4,63 +4,69 @@ import { quickError } from './utils';
 
 const DEFAULT_STATE_BUFFER_SIZE = 2;
 
-class StateBuffer
-{
-    constructor()
-    {
+// class StateBuffer
+// {
+//     constructor()
+//     {
         
-    }
-}
+//     }
+// }
 
-type SerializableType = string | number;
+type SerializableType = string | number | ComponentState;
+
+type ComponentState = SerializableType[];
 
 function isSerializable(value: SerializableType)
 {
     return typeof(value) === 'number' || typeof(value) === 'string';
 }
 
-type ComponentState = SerializableType[];
-
-type SyncProperty = string | ( () => SerializableType[] );
-
-const PLACEHOLDER: SerializableType[] = [];
-
-function serialize(value: any): SerializableType[]
+export interface CustomSyncProperty
 {
-    if (value == null)
-    {
-        quickError(`Value: ${value} is not serializable`);
-        return PLACEHOLDER;
-    }
-
-    if (isSerializable(value))
-    {
-        return [ value ];
-    }
-
-    if (typeof(value) === 'function')
-    {
-        return serialize(value());
-    }
-
-    if (Array.isArray(value))
-    {
-        let arr: SerializableType[] = [];
-        for (const val of value)
-        {
-            arr = arr.concat(serialize(val));
-        }
-    }
-
-    if (typeof(value) === 'object')
-    {
-        quickError(`Value: ${value} is not serializable`);
-        return PLACEHOLDER;
-    }
-    
-    quickError(`Value: ${value} is not serializable or was not recognized.`);
-    return PLACEHOLDER;
+    getProps: () => ComponentState,
+    setProps: (state: ComponentState) => void,
 }
+
+type SyncProperty = string | CustomSyncProperty;
+
+// const PLACEHOLDER: SerializableType[] = [];
+
+// function serialize(value: any): SerializableType[]
+// {
+//     if (value == null)
+//     {
+//         quickError(`Value: ${value} is not serializable`);
+//         return PLACEHOLDER;
+//     }
+
+//     if (isSerializable(value))
+//     {
+//         return [ value ];
+//     }
+
+//     if (typeof(value) === 'function')
+//     {
+//         return serialize(value());
+//     }
+
+//     if (Array.isArray(value))
+//     {
+//         let arr: SerializableType[] = [];
+//         for (const val of value)
+//         {
+//             arr = arr.concat(serialize(val));
+//         }
+//     }
+
+//     if (typeof(value) === 'object')
+//     {
+//         quickError(`Value: ${value} is not serializable`);
+//         return PLACEHOLDER;
+//     }
+    
+//     quickError(`Value: ${value} is not serializable or was not recognized.`);
+//     return PLACEHOLDER;
+// }
 
 export type ComponentClass<T extends Component = Component> = 
     new (ecs: ECS, entity: Entity) => T;
@@ -107,11 +113,22 @@ export default class Component
     {
         if (this.hasRunStart)
         {
-            quickError(`syncState() can only be called before or during the start() method. This ensures that all variables stay in sync`);
-            return;
+            quickError(`syncState() can only be called before or during the start() method. This ensures that all variables stay in sync`, true);
         }
 
-        this.syncProperties.push(syncProperty);
+        if (typeof(syncProperty) === 'string')
+        {
+            this.syncProperties.push(syncProperty);
+        }
+
+        if (typeof(syncProperty as CustomSyncProperty) === 'object')
+        {
+            if (!syncProperty.hasOwnProperty('getProps') ||
+                !syncProperty.hasOwnProperty('setProps'))
+            {
+                quickError("Objects as properties are only possible as CustomSyncProperties, which must include a getProps() and setProps function.", true);
+            }
+        }
     }
 
     /**
@@ -129,12 +146,69 @@ export default class Component
 
             if (typeof(prop) === 'string')
             {
-                value = (<any>this)[prop];
+                value = this.getProperty(prop);
             }
 
-            if (typeof(prop) === 'function')
+            if (typeof(prop) === 'object')
             {
-                value = prop();
+                if (!prop.hasOwnProperty('getProps'))
+                {
+                    quickError('cannot call getProps on property', true);
+                }
+                value = prop.getProps();
+            }
+
+            if (value == null)
+            {
+                quickError(`syncProperty: '${prop}' was not found on object.`, true);
+            }
+
+            // IF PROP IS ARRAY 
+            if (Array.isArray(value))
+            {
+                for (let i = 0; i < value.length; i++)
+                {
+                    if (isSerializable(value[i]))
+                    {
+                        state.push(value[i]);
+                    }
+                }
+                continue;
+            }
+
+            // IF PROP IS NOT ARRAY
+            if (isSerializable(value))
+            {
+                state.push(value);
+                continue;
+            }
+
+            // OTHERWISE
+            quickError(`syncProperty: '${prop}' was not found on object.`);
+        }
+
+        return state;
+    }
+
+    setState(state: ComponentState) : void
+    {
+        let pointer = 0;
+
+        for (const prop of this.syncProperties)
+        {
+            if (typeof(prop) === 'string')
+            {
+                this.setProperty(prop, state[pointer++]);
+                continue;
+            }
+
+            if (typeof(prop) === 'object')
+            {
+                if (!prop.hasOwnProperty('setProps'))
+                {
+                    quickError('cannot call setProps on property', true);
+                }
+                
             }
 
             if (value == null)
@@ -167,52 +241,37 @@ export default class Component
         return state;
     }
 
-    setState(stateArray: SerializableType[])
+    /** @internal */
+    getProperty(propertyName: string)
     {
-        let state: SerializableType[] = [];
-
-        for (const prop of this.syncProperties)
+        if ((<any>this)[propertyName] == null)
         {
-            let value: any;
+            quickError(`Component ${Object.getPrototypeOf(this).name} does not have a property named ${propertyName}.`, true);
+        }
+        else
+        {
+            return (<any>this)[propertyName]
+        }
+    }
 
-            if (typeof(prop) === 'string')
+    setProperty(propertyName: string, value: any)
+    {
+        if (true) // debug env
+        {
+            let propValue = (<any>this)[propertyName];
+            
+            if (propValue == null)
             {
-                value = (<any>this)[prop];
+                quickError(`Component ${Object.getPrototypeOf(this).name} does not have a property named ${propertyName}.`, true);
             }
-
-            if (typeof(prop) === 'function')
+            
+            if (typeof(propValue) !== typeof(value))
             {
-                value = prop();
+                quickError(`At component ${Object.getPrototypeOf(this).name}: Property type cannot be different from its initial state (initial type: ${typeof(propValue)}, passed value type: ${typeof(value)}).`, true);
             }
-
-            if (value == null)
-            {
-                quickError(`syncProperty: '${prop}' was not found on object.`);
-                continue;
-            }
-
-            if (Array.isArray(value))
-            {
-                for (let i = 0; i < value.length; i++)
-                {
-                    if (isSerializable(value[i]))
-                    {
-                        state.push(value[i]);
-                    }
-                }
-                continue;
-            }
-
-            if (isSerializable(value))
-            {
-                state.push(value);
-                continue;
-            }
-
-            quickError(`syncProperty: '${prop}' was not found on object.`);
         }
 
-        return state;
+        (<any>this)[propertyName] = value;
     }
 
     /** @internal */
