@@ -1,5 +1,5 @@
-import Component, { ComponentClass } from './component';
-import Entity from './entity';
+import { Component, ComponentClass } from './component';
+import { Entity } from './entity';
 import { quickError, quickWarn } from './utils';
 
 type ComponentRow = 
@@ -14,13 +14,13 @@ type ComponentOptions = {
 }
 
 type ComponentArrayItem =
-    ComponentClass | [ classConstructor: ComponentClass, options: ComponentOptions ]
+    ComponentClass | [ classConstructor: ComponentClass, options: ComponentOptions ];
 
 export abstract class ECS
 {
-    private entities = new Map<string, Entity>();
-    private components: ComponentRow[] = [];
-    private defaultComponents: ComponentClass<Component>[] = [];
+    protected entities = new Map<string, Entity>();
+    protected components: ComponentRow[] = [];
+    protected defaultComponents: ComponentClass<Component>[] = [];
 
     constructor(componentList: ComponentArrayItem[])
     {
@@ -131,32 +131,65 @@ export abstract class ECS
         return [ ...(<Set<T>>row.instances) ];
     }
     
-    createEntity()
+    createEntity(id?: string)
     {
-        // VERY VERY TEMPORARY 
-        let randomId = (Math.floor(Math.random() * 1000000000000000)).toString(16).slice(0, 6);
+        if (id == null)
+        {
+            id = (Math.floor(Math.random() * 1000000000000000)).toString(16).slice(0, 6);
+        }
 
-        let entity = new Entity(this, randomId);
+        let entity = new Entity(this, id);
 
         for (let i = 0; i < this.defaultComponents.length; i++)
         {
             entity.addComponent(this.defaultComponents[i]);
         }
-        this.entities.set(randomId, entity);
+        this.entities.set(id, entity);
 
         return entity;
     }
 
-    removeEntity(id: string)
+    destroyEntityById(id: string)
     {
         let entity = this.entities.get(id);
         if (entity == null) return false;
 
-        entity.dispose();
-        this.entities.delete(id);
+        this.destroy(entity);
         return true;
     }
 
+    destroy(component: Component): void;
+    destroy(entity: Entity): void;
+    destroy(obj: any)
+    {
+        if (obj instanceof Component)
+        {
+            obj.onDestroy();
+            obj.isDestroyed = true;
+
+            let constructorFunction = Object.getPrototypeOf(obj).constructor;
+            this.unsubscribeComponent(constructorFunction, obj);
+            
+            return;
+        }
+
+        if (obj instanceof Entity)
+        {
+            for (const comp of obj.components)
+            {
+                this.destroy(comp);
+            }
+            obj.components = [];
+            obj.isDestroyed = true;
+            this.entities.delete(obj.id);
+
+            return;
+        }
+    }
+}
+
+export class SinglePlayerECS extends ECS
+{
     update()
     {
         // start
@@ -178,6 +211,15 @@ export abstract class ECS
             for (let component of componentRow.instances)
             {
                 component.update();
+            }
+        }
+
+        // render
+        for (const componentRow of this.components)
+        {
+            for (let component of componentRow.instances)
+            {
+                component.render();
             }
         }
     }

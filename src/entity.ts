@@ -1,21 +1,24 @@
-import Component from './component';
+import { Component, ComponentClass } from './component';
 import { ECS } from './ecs';
 
-export default class Entity
+export class Entity
 {
-    private components: Component[] = [];
+    /** @internal */
+    components: Component[] = [];
     
+    isDestroyed = false;
+
     get id() { return this._id; }
 
     constructor(
-        private ecs: ECS,
+        public ecs: ECS,
         private _id: string
     )
     {
         
     }
 
-    getComponent<T extends Component>(componentType: typeof Component)
+    getComponent<T extends Component>(componentType: ComponentClass<T>)
     {
         for (const component of this.components)
         {
@@ -24,16 +27,14 @@ export default class Entity
                 return component;
             }
         }
-
-        console.error(`Component ${componentType.name} was not found on entity! Use addComponent() to create a new one or use hasComponent() to check its existence beforehand. This function could have also run before the component was attached to this entity, so check your order of execution.`)
     }
 
-    hasComponent<T extends Component>(componentType: typeof Component)
+    hasComponent<T extends Component>(componentType: ComponentClass<T>)
     {
         return this.getComponent(componentType) != null;
     }
 
-    addComponent<T extends Component>(componentType: typeof Component)
+    addComponent<T extends Component>(componentType: ComponentClass<T>)
     {
         let c = this.getComponent(componentType);
         if (c != null)
@@ -51,89 +52,19 @@ export default class Entity
         return c;
     }
 
-    removeComponent<T extends Component>(componentType: typeof Component)
-    {
-        for (let i = 0; i < this.components.length; i++)
-        {
-            if (this.components[i] instanceof componentType)
-            {
-                let c = this.components.splice(i, 1)[0];
-                this.ecs.unsubscribeComponent(componentType, c);
-                c.dispose();
-                return true;
-            }
-        }
+    // removeCom ponent<T extends Component>(componentType: ComponentClass<T>)
+    // {
+    //     for (let i = 0; i < this.components.length; i++)
+    //     {
+    //         if (this.components[i] instanceof componentType)
+    //         {
+    //             let c = this.components.splice(i, 1)[0];
+    //             this.ecs.unsubscribeComponent(componentType, c);
+    //             c.dispose();
+    //             return true;
+    //         }
+    //     }
 
-        return false;
-    }
-
-    dispose()
-    {
-        for (let i = 0; i < this.components.length; i++)
-        {
-            let c = this.components[i];
-            c.dispose();
-            
-            // should work???
-            let constructorFunction = Object.getPrototypeOf(c).constructor;
-            this.ecs.unsubscribeComponent(constructorFunction, c);
-        }
-
-        this.components = [];
-    }
+    //     return false;
+    // }
 }
-
-// export class Entity
-// {
-//     constructor(private game: Game)
-//     {
-        
-//     }
-
-//     private components = new Map<typeof Component, Component>();
-
-//     getComponent<T extends Component>(componentType: new (game: Game, entity: Entity) => T)
-//     {
-//         return <T>this.components.get(componentType);
-//     }
-
-//     addComponent<T extends Component>(componentType: new (game: Game, entity: Entity) => T)
-//     {
-//         let c = this.components.get(componentType);
-
-//         if (c === undefined)
-//         {
-//             c = new componentType(this.game, this);
-//             c.start();
-            
-//             this.game.subscribeComponent(componentType, c);
-            
-//             this.components.set(componentType, c);
-//         }
-
-//         return <T>c;
-//     }
-
-//     removeComponent<T extends Component>(componentType: new (game: Game, entity: Entity) => T)
-//     {
-//         let c = this.components.get(componentType);
-
-//         if (c === undefined)
-//         {
-//             return;
-//         }
-
-//         c.onDestroy();
-
-//         this.game.unsubscribeComponent(componentType, c);
-//         return this.components.delete(componentType);
-//     }
-
-//     removeAllComponents()
-//     {
-//         for (let [ cType, c ] of this.components)
-//         {
-//             this.removeComponent(cType);
-//         }
-//     }
-// }

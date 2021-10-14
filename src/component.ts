@@ -1,5 +1,6 @@
+import { timeStamp } from 'console';
 import { ECS } from './ecs';
-import Entity from './entity';
+import { Entity } from './entity';
 import { quickError } from './utils';
 
 const DEFAULT_STATE_BUFFER_SIZE = 2;
@@ -18,6 +19,18 @@ type ComponentState = SerializableType[];
 
 function isSerializable(value: SerializableType)
 {
+    if (Array.isArray(value))
+    {
+        for (const v of value)
+        {
+            if (!isSerializable(v))
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
     return typeof(value) === 'number' || typeof(value) === 'string';
 }
 
@@ -29,65 +42,28 @@ export interface CustomSyncProperty
 
 type SyncProperty = string | CustomSyncProperty;
 
-// const PLACEHOLDER: SerializableType[] = [];
-
-// function serialize(value: any): SerializableType[]
-// {
-//     if (value == null)
-//     {
-//         quickError(`Value: ${value} is not serializable`);
-//         return PLACEHOLDER;
-//     }
-
-//     if (isSerializable(value))
-//     {
-//         return [ value ];
-//     }
-
-//     if (typeof(value) === 'function')
-//     {
-//         return serialize(value());
-//     }
-
-//     if (Array.isArray(value))
-//     {
-//         let arr: SerializableType[] = [];
-//         for (const val of value)
-//         {
-//             arr = arr.concat(serialize(val));
-//         }
-//     }
-
-//     if (typeof(value) === 'object')
-//     {
-//         quickError(`Value: ${value} is not serializable`);
-//         return PLACEHOLDER;
-//     }
-    
-//     quickError(`Value: ${value} is not serializable or was not recognized.`);
-//     return PLACEHOLDER;
-// }
-
 export type ComponentClass<T extends Component = Component> = 
     new (ecs: ECS, entity: Entity) => T;
 
-export default class Component
+export class Component
 {
     /** @internal */
     hasRunStart = false;
 
     /** @internal */
-    private syncProperties: SyncProperty[] = [];
+    syncProperties: SyncProperty[] = [];
 
-    /** @internal */
-    private stateBuffer: StateBuffer;
+    // /** @internal */
+    // private stateBuffer: StateBuffer;
+
+    public isDestroyed = false;
 
     constructor(
         public ecs: ECS,
         public entity: Entity
         )
     { 
-        this.stateBuffer = new StateBuffer();
+        // this.stateBuffer = new StateBuffer();
     }
 
     getId()
@@ -101,32 +77,31 @@ export default class Component
 
     update() {}
 
+    render() {}
+
     onDestroy() {}
 
-    /** @internal */
-    dispose()
-    {
-        this.onDestroy();
-    }
-
-    syncState(syncProperty: SyncProperty)
+    sync(...syncProperties: SyncProperty[])
     {
         if (this.hasRunStart)
         {
-            quickError(`syncState() can only be called before or during the start() method. This ensures that all variables stay in sync`, true);
+            quickError(`${this.sync.name}() can only be called before or during the start() method. This ensures that all variables stay in sync`, true);
         }
 
-        if (typeof(syncProperty) === 'string')
+        for (const syncProperty of syncProperties)
         {
-            this.syncProperties.push(syncProperty);
-        }
-
-        if (typeof(syncProperty as CustomSyncProperty) === 'object')
-        {
-            if (!syncProperty.hasOwnProperty('getProps') ||
-                !syncProperty.hasOwnProperty('setProps'))
+            if (typeof(syncProperty) === 'string')
             {
-                quickError("Objects as properties are only possible as CustomSyncProperties, which must include a getProps() and setProps function.", true);
+                this.syncProperties.push(syncProperty);
+            }
+    
+            if (typeof(syncProperty as CustomSyncProperty) === 'object')
+            {
+                if (!syncProperty.hasOwnProperty('getProps') ||
+                    !syncProperty.hasOwnProperty('setProps'))
+                {
+                    quickError("Objects as properties are only possible as CustomSyncProperties, which must include a getProps() and setProps function.", true);
+                }
             }
         }
     }
@@ -163,28 +138,12 @@ export default class Component
                 quickError(`syncProperty: '${prop}' was not found on object.`, true);
             }
 
-            // IF PROP IS ARRAY 
-            if (Array.isArray(value))
+            if (!isSerializable(value))
             {
-                for (let i = 0; i < value.length; i++)
-                {
-                    if (isSerializable(value[i]))
-                    {
-                        state.push(value[i]);
-                    }
-                }
-                continue;
+                quickError(`Value: '${value}' of property ${prop} was not recognized as a serializable value. Valid types are stated as Type SerializableValue.`);
             }
-
-            // IF PROP IS NOT ARRAY
-            if (isSerializable(value))
-            {
-                state.push(value);
-                continue;
-            }
-
-            // OTHERWISE
-            quickError(`syncProperty: '${prop}' was not found on object.`);
+            
+            state.push(value);
         }
 
         return state;
@@ -196,6 +155,11 @@ export default class Component
 
         for (const prop of this.syncProperties)
         {
+            if (state[pointer] == null)
+            {
+                 quickError(`Received state was smaller than expected. End of state array reached.`, true);
+            }
+
             if (typeof(prop) === 'string')
             {
                 this.setProperty(prop, state[pointer++]);
@@ -208,37 +172,17 @@ export default class Component
                 {
                     quickError('cannot call setProps on property', true);
                 }
-                
-            }
 
-            if (value == null)
-            {
-                quickError(`syncProperty: '${prop}' was not found on object.`);
-                continue;
-            }
-
-            if (Array.isArray(value))
-            {
-                for (let i = 0; i < value.length; i++)
+                let stateSection = state[pointer++] as ComponentState;
+                if (!Array.isArray(stateSection))
                 {
-                    if (isSerializable(value[i]))
-                    {
-                        state.push(value[i]);
-                    }
+                    quickError(`Prop must be of type Array. type ${typeof(stateSection)} received instead.`, true);
                 }
+
+                prop.setProps(stateSection);
                 continue;
             }
-
-            if (isSerializable(value))
-            {
-                state.push(value);
-                continue;
-            }
-
-            quickError(`syncProperty: '${prop}' was not found on object.`);
         }
-
-        return state;
     }
 
     /** @internal */
@@ -274,11 +218,11 @@ export default class Component
         (<any>this)[propertyName] = value;
     }
 
-    /** @internal */
-    addStateToBuffer()
-    {
+    // /** @internal */
+    // addStateToBuffer()
+    // {
         
-    }
+    // }
 
     /**
      * Returns an attached component and creates if non existent.
@@ -301,8 +245,10 @@ export default class Component
         return this.entity.hasComponent(componentType);
     }
 
-    removeComponent<T extends Component>(componentType: ComponentClass<T>)
+    destroy(component: Component): void;
+    destroy(entity: Entity): void;
+    destroy(obj: any)
     {
-        return this.entity.removeComponent(componentType);
+        this.ecs.destroy(obj);
     }
 }
