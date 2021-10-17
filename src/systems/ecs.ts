@@ -1,20 +1,8 @@
-import { Component, ComponentClass } from './component';
-import { Entity } from './entity';
-import { quickError, quickWarn } from './utils';
-
-type ComponentRow = 
-{
-    componentClass: ComponentClass;
-    instances: Set<Component>;
-    options: {}    
-}
-
-type ComponentOptions = {
-    isDefault?: boolean;
-}
-
-type ComponentArrayItem =
-    ComponentClass | [ classConstructor: ComponentClass, options: ComponentOptions ];
+import { Component, ComponentClass } from '../component';
+import { Entity } from '../entity';
+import { InputChannel } from '../inputChannel';
+import { getUTCSeconds, quickError, quickWarn } from '../utils';
+import { ComponentArrayItem, ComponentOptions, ComponentRow, LocalArgs, Time } from './ecsTypes';
 
 export abstract class ECS
 {
@@ -22,7 +10,20 @@ export abstract class ECS
     protected components: ComponentRow[] = [];
     protected defaultComponents: ComponentClass<Component>[] = [];
 
-    constructor(componentList: ComponentArrayItem[])
+    /** @internal */
+    private inputChannels = new Map<string, InputChannel>();
+    private defaultInputChannel;
+
+    private _time;
+    get deltaTime() { return this._time.dt; }
+    get currentTime() { return this._time.current; }
+    get starTime() { return this._time.start; }
+    get totalTime() { return this._time.total; }
+
+    constructor(
+        componentList: ComponentArrayItem[], 
+        public localArgs: LocalArgs,
+    )
     {
         if (componentList.length === 0)
         {
@@ -46,7 +47,6 @@ export abstract class ECS
             if (!(componentClass.prototype instanceof Component))
             {
                 quickError(`Component ${componentClass.name} is not a valid quick component. The component must extend from the quick.Component class.`, true);
-                return;
             }
 
             this.components.push({
@@ -60,22 +60,17 @@ export abstract class ECS
                 this.defaultComponents.push(componentClass);
             }
         }
+        
+        let currentTime = getUTCSeconds();
+        this._time = {
+            dt: 0.1,
+            total: 0,
+            current: currentTime,
+            start: currentTime,
+        } as Time;
+
+        this.defaultInputChannel = this.createInputChannel('default');
     }
-
-    // createInputChannel()
-    // {
-    //     return this.inputManager.createChannel();
-    // }
-
-    // deleteInputChannel(channel: InputChannel)
-    // {
-    //     this.inputManager.deleteChannel(channel);
-    // }
-
-    // setDefaultComponents(defaultComponentList: (typeof Component)[])
-    // {
-    //     this.defaultComponents = defaultComponentList;
-    // }
 
     /** @internal */
     getRowIndexFromType(componentClass: ComponentClass)
@@ -164,7 +159,7 @@ export abstract class ECS
     {
         if (obj instanceof Component)
         {
-            obj.onDestroy();
+            obj.onDestroy(this.localArgs);
             obj.isDestroyed = true;
 
             let constructorFunction = Object.getPrototypeOf(obj).constructor;
@@ -186,41 +181,77 @@ export abstract class ECS
             return;
         }
     }
-}
 
-export class SinglePlayerECS extends ECS
-{
-    update()
+    /** @internal */
+    createInputChannel(id: string)
     {
-        // start
-        for (const componentRow of this.components)
+        let channel = new InputChannel(id);
+        this.inputChannels.set(id, channel);
+        return channel;
+    }
+
+    /** @internal */
+    removeInputChannel(id: string)
+    {
+        return this.inputChannels.delete(id);
+    }
+
+    /** @internal */
+    getInputChannel(id: string)
+    {
+        return this.inputChannels.get(id);
+    }
+
+    getDefaultInputChannel()
+    {
+        return this.defaultInputChannel;
+    }
+
+    update(runStart: boolean, runUpdate: boolean, runRender: boolean)
+    {
+        // time
+        let currTime = getUTCSeconds();
+        this._time.total = currTime - this._time.start;
+        this._time.dt = currTime - this._time.current;
+        this._time.current = currTime;
+
+        if (runStart)
         {
-            for (let component of componentRow.instances)
+            for (const componentRow of this.components)
             {
-                if (!component.hasRunStart)
+                for (let component of componentRow.instances)
                 {
-                    component.start();
-                    component.hasRunStart = true;
+                    if (!component.hasRunStart)
+                    {
+                        component.start(this.localArgs);
+                        component.hasRunStart = true;
+                    }
                 }
             }
         }
 
-        // update
-        for (const componentRow of this.components)
+        if (runUpdate)
         {
-            for (let component of componentRow.instances)
+            for (const componentRow of this.components)
             {
-                component.update();
+                for (let component of componentRow.instances)
+                {
+                    component.update(this.localArgs);
+                }
             }
         }
 
-        // render
-        for (const componentRow of this.components)
+        if (runRender)
         {
-            for (let component of componentRow.instances)
+            for (const componentRow of this.components)
             {
-                component.render();
+                for (let component of componentRow.instances)
+                {
+                    component.render(this.localArgs);
+                }
             }
         }
+
+
     }
 }

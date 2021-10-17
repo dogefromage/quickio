@@ -1,21 +1,14 @@
-import { timeStamp } from 'console';
-import { ECS } from './ecs';
+import { ECS } from './systems/ecs';
 import { Entity } from './entity';
-import { quickError } from './utils';
+import { InputChannel } from './inputChannel';
+import { quickError, quickWarn } from './utils';
+import { LocalArgs, Time } from './systems/ecsTypes';
 
 const DEFAULT_STATE_BUFFER_SIZE = 2;
 
-// class StateBuffer
-// {
-//     constructor()
-//     {
-        
-//     }
-// }
-
 type SerializableType = string | number | ComponentState;
 
-type ComponentState = SerializableType[];
+export type ComponentState = SerializableType[];
 
 function isSerializable(value: SerializableType)
 {
@@ -53,33 +46,42 @@ export class Component
     /** @internal */
     syncProperties: SyncProperty[] = [];
 
-    // /** @internal */
-    // private stateBuffer: StateBuffer;
+    public isDestroyed;
 
-    public isDestroyed = false;
+    public input: InputChannel;
 
+    /**
+     * @ignore
+     */
     constructor(
         public ecs: ECS,
         public entity: Entity
         )
     { 
-        // this.stateBuffer = new StateBuffer();
+        this.input = this.ecs.getDefaultInputChannel();
+        this.isDestroyed = false;
     }
 
-    getId()
+    awake(localArgs: LocalArgs) {}
+
+    start(localArgs: LocalArgs) {}
+
+    update(localArgs: LocalArgs) {}
+
+    render(localArgs: LocalArgs) {}
+
+    onDestroy(localArgs: LocalArgs) {}
+
+    setInputChannel(channelId: string)
     {
-        return (<any>this.constructor).id;
+        let channel = this.ecs.getInputChannel(channelId);
+        if (channel == null)
+        {
+            quickWarn(`Input channel "${channelId}" did not exist. Current input channel used.`);
+            return;
+        }
+        this.input = channel;
     }
-
-    awake() {}
-
-    start() {}
-
-    update() {}
-
-    render() {}
-
-    onDestroy() {}
 
     sync(...syncProperties: SyncProperty[])
     {
@@ -108,7 +110,6 @@ export class Component
 
     /**
      * This method is used internally to pack all sync-properties into an array in the order in which they where assigned. This method can be overwritten or the output can be modified using super.getState().
-     * 
      * @returns Array of serialized sync vars
      */
     getState(): ComponentState
@@ -157,7 +158,7 @@ export class Component
         {
             if (state[pointer] == null)
             {
-                 quickError(`Received state was smaller than expected. End of state array reached.`, true);
+                quickError(`Received state was smaller than expected. End of state array reached.`, true);
             }
 
             if (typeof(prop) === 'string')
@@ -198,6 +199,7 @@ export class Component
         }
     }
 
+    /** @internal */
     setProperty(propertyName: string, value: any)
     {
         if (true) // debug env
@@ -218,31 +220,30 @@ export class Component
         (<any>this)[propertyName] = value;
     }
 
-    // /** @internal */
-    // addStateToBuffer()
-    // {
-        
-    // }
+    /**
+     * Returns a component attached to the same entity or undefined if no component of this class exists.
+     * @param componentClass - Class of component.
+     * @returns component - component attached to the same entity.
+     */
+    getComponent<T extends Component>(componentClass: ComponentClass<T>)
+    {
+        return this.entity.getComponent(componentClass);
+    }
 
     /**
-     * Returns an attached component and creates if non existent.
-     * If you would like to only get a component if it is attached, use getComponentConditional().
-     * @param componentType - Component class, which will be returned
-     * @returns component - instance of componentType which is attached to this entity.
+     * Same as
+     * ```typescript
+     * this.entity.addComponent<T extends Component>(componentClass: ComponentClass<T>)
+     * ```
      */
-    getComponent<T extends Component>(componentType: ComponentClass<T>)
+    addComponent<T extends Component>(componentClass: ComponentClass<T>)
     {
-        return this.entity.getComponent(componentType);
+        return this.entity.addComponent(componentClass);
     }
 
-    addComponent<T extends Component>(componentType: ComponentClass<T>)
+    hasComponent<T extends Component>(componentClass: ComponentClass<T>)
     {
-        return this.entity.addComponent(componentType);
-    }
-
-    hasComponent<T extends Component>(componentType: ComponentClass<T>)
-    {
-        return this.entity.hasComponent(componentType);
+        return this.entity.hasComponent(componentClass);
     }
 
     destroy(component: Component): void;

@@ -1,3 +1,6 @@
-export { SinglePlayerECS } from './ecs';
+
+export * from './systems/singlePlayerEcs';
+export * from './systems/clientEcs';
+export * from './systems/serverEcs';
 export * from './entity';
 export * from './component';
