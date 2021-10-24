@@ -1,10 +1,13 @@
+import { ActiveComponent } from "..";
+import { Time } from "../time";
 import { compressNumber } from "../utils";
-import { ECS } from "./ecs";
-import { ClientDataPacket, ComponentArrayItem, LocalArgs, ServerDataPacket } from "./ecsTypes";
+import { BrowserECS } from "./browserEcs";
+import { ClientDataPacket, ComponentArrayItem, EntityUpdateTypes, LocalArgs, ServerDataPacket } from "./ecsTypes";
 
-export class ClientECS extends ECS
+export class ClientECS extends BrowserECS
 {
-    private clientInputChannel;
+    /** @internal */
+    serverTime = new Time();
 
     constructor(
         componentList: ComponentArrayItem[],
@@ -12,83 +15,92 @@ export class ClientECS extends ECS
         public clientId: string
     )
     {
-        super(componentList, localArgs);
-
-        this.clientInputChannel = this.createInputChannel(clientId);
-
-        document.addEventListener('keydown', (e: KeyboardEvent) =>
-        {
-            this.clientInputChannel.setKeyDown(e.keyCode);
-        });
-        document.addEventListener('keyup', (e: KeyboardEvent) =>
-        {
-            this.clientInputChannel.setKeyUp(e.keyCode);
-        });
+        // will listen to input channel with same ID as socket client
+        super(componentList, localArgs, clientId); 
     }
 
     update()
     {
-        super.update(true, false, true);
-    }
+        this._time.update();
 
-    /**
-     * @internal
-     */
-    processServerData(serverData: ServerDataPacket)
-    {
-        const serverEntities = serverData.en;
+        const methodParams = this.getComponentMethodParams();
 
-        if (serverEntities == null) return;
-
-        for (const [ id, updateType, componentList ] of serverEntities)
+        // UPDATE INTERPOLATE
+        for (const componentRow of this.components)
         {
-            let entity = this.entities.get(id);
-            if (!entity)
+            for (let component of componentRow.instances)
             {
-                entity = this.createEntity(id);
-            }
-
-            if (!componentList) continue;
-
-            for (const [ componentIndex, componentState ] of componentList)
-            {
-                const row = this.components[componentIndex];
+                component.interpolateState(methodParams);
                 
-                let comp = entity.getComponent(row.componentClass);
-                if (!comp) comp = entity.addComponent(row.componentClass);
+                if (component instanceof ActiveComponent)
+                {
+                    component.activeUpdate(methodParams);
+                }
+            }
+        }
 
-                comp.setState(componentState);
+        // RENDER
+        for (const componentRow of this.components)
+        {
+            for (let component of componentRow.instances)
+            {
+                component.render(methodParams);
             }
         }
     }
 
-    /**
-     * @internal
-     */
-    collectClientData()
+    onServerData(serverDataString: string)
     {
-        const clientData = {} as ClientDataPacket;
-        
-        const input = this.clientInputChannel.getDataAndClear();
-        if (input != null)
-        {
-            clientData.in = input;
-        }
+        this.serverTime.update();
 
-        if (Object.entries(clientData).length > 0)
-        {
-            return clientData;
-        }
-    }
-
-    exchangeData(serverDataString: string)
-    {
         const serverData = JSON.parse(serverDataString) as ServerDataPacket;
 
-        this.processServerData(serverData);
+        /**
+         * Process all entity data sent by the server
+         */
+        for (const [ id, updateType, componentList ] of serverData.en || [])
+        {
+            let entity = this.entities.get(id);
 
-        let clientData = this.collectClientData();
-        if (clientData != null)
+            if (updateType === EntityUpdateTypes.Update)
+            {
+                if (!entity)
+                {
+                    entity = this.createEntity(id);
+                }
+    
+                if (!componentList) continue;
+    
+                for (const [ componentIndex, componentState ] of componentList)
+                {
+                    const row = this.components[componentIndex];
+                    
+                    let comp = entity.getComponent(row.componentClass);
+                    if (!comp) comp = entity.addComponent(row.componentClass);
+    
+                    comp.onServerState(componentState, -1, this.serverTime);
+                }
+            }
+            else if (updateType === EntityUpdateTypes.Destroyed)
+            {
+                if (entity)
+                {
+                    this.destroy(entity);
+                }
+            }
+        }
+
+        /**
+         * collect client data
+         */
+        const clientData = {} as ClientDataPacket;
+        
+        // get input data
+        const input = this.localInputChannel.getDataAndUpdate();
+        if (input != null) clientData.in = input;
+
+        // only send data if there's something to send
+        if (Object.entries(clientData).length > 0)
         {
             return JSON.stringify(clientData, (key, value) =>
             {

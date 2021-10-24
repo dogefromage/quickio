@@ -1,3 +1,4 @@
+import { KeyCodes, quickError } from "./utils";
 
 type KeyData = 
 {
@@ -8,8 +9,8 @@ type KeyCode = number;
 
 export type InputData =
 {
-    on?: KeyCode[];
-    off?: KeyCode[];
+    down?: KeyCode[];
+    up?: KeyCode[];
 }
 
 export class InputChannel
@@ -18,6 +19,12 @@ export class InputChannel
 
     private currentPressedKeys;
     private lastPressedKeys;
+
+    private saved?: {
+        keyData: Map<KeyCode, KeyData>,
+        currentPressedKeys: Set<KeyCode>,
+        lastPressedKeys: Set<KeyCode>,
+    };
 
     constructor(
         public id: string,
@@ -29,8 +36,32 @@ export class InputChannel
         this.lastPressedKeys = new Set<KeyCode>();
     }
 
+    /** @internal */
+    save()
+    {
+        this.saved = {
+            keyData: new Map([ ...this.keyData ]),
+            currentPressedKeys: new Set([ ...this.currentPressedKeys ]),
+            lastPressedKeys: new Set([ ...this.lastPressedKeys ]),
+        };
+    }
+
+    /** @internal */
+    restore()
+    {
+        if (!this.saved) return;
+
+        this.keyData = this.saved.keyData;
+        this.currentPressedKeys = this.saved.currentPressedKeys;
+        this.lastPressedKeys = this.lastPressedKeys;
+
+        this.saved = undefined;
+    }
+
     setKeyDown(code: KeyCode)
     {
+        if (typeof(code) !== 'number') quickError(`Keycode type must be number`);
+        
         this.keyData.set(code, {
             isPressed: true,
         });
@@ -39,15 +70,16 @@ export class InputChannel
 
     setKeyUp(code: KeyCode)
     {
+        if (typeof(code) !== 'number') quickError(`Keycode type must be number`);
+        
         let key = this.keyData.get(code);
-
         if (key != null)
         {
             key.isPressed = false;
         };
     }
 
-    clear()
+    update()
     {
         for (const [ code, keyData ] of this.keyData)
         {
@@ -58,7 +90,7 @@ export class InputChannel
         }
     }
 
-    getDataAndClear()
+    getDataAndUpdate()
     {
         const data: InputData = 
         {
@@ -68,18 +100,18 @@ export class InputChannel
         // in last set but not in current set => set off
         let off = [ ...this.lastPressedKeys ]
             .filter(code => !this.currentPressedKeys.has(code));
-        if (off.length > 0) data.off = off;
+        if (off.length > 0) data.up = off;
 
         // in current set but not in last set => set on
         let on = [ ...this.currentPressedKeys ]
             .filter(code => !this.lastPressedKeys.has(code));
-        if (on.length > 0) data.on = on;
+        if (on.length > 0) data.down = on;
 
         // update last
         this.lastPressedKeys = new Set([ ...this.currentPressedKeys ]);
 
         // clear old keys
-        this.clear();
+        this.update();
 
         if (Object.entries(data).length > 0)
         {
@@ -87,9 +119,50 @@ export class InputChannel
         }
     }
 
+    setDataAndUpdate(inputData: InputData)
+    {
+        for (const key of inputData.up || [])
+        {
+            this.setKeyUp(key);
+        }
+
+        for (const key of inputData.down || [])
+        {
+            this.setKeyDown(key);
+        }
+
+        this.update();
+    }
+
     isKeyPressed(code: KeyCode)
     {
         return this.currentPressedKeys.has(code);
+    }
+
+    calculateAxes(wasd = true, arrows = false)
+    {
+        let left, up, right, down;
+
+        if (wasd)
+        {
+            left = this.isKeyPressed(KeyCodes.KeyA);
+            up = this.isKeyPressed(KeyCodes.KeyW);
+            right = this.isKeyPressed(KeyCodes.KeyD);
+            down = this.isKeyPressed(KeyCodes.KeyS);
+        }
+        
+        if (arrows)
+        {
+            left ||= this.isKeyPressed(KeyCodes.ArrowLeft);
+            up ||= this.isKeyPressed(KeyCodes.ArrowUp);
+            right ||= this.isKeyPressed(KeyCodes.ArrowRight);
+            down ||= this.isKeyPressed(KeyCodes.ArrowDown);
+        }
+
+        return {
+            x: (right ? 1 : 0) - (left ? 1 : 0),
+            y: (up ? 1 : 0) - (down ? 1 : 0),
+        }
     }
 }
 

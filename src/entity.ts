@@ -48,7 +48,8 @@ export class Entity
 
         // create new component
         c = new componentClass(this.ecs, this);
-        c.awake(this.ecs.localArgs);
+        c.init(this.ecs.getComponentMethodParams());
+        c.hasRunInit = true;
         this.ecs.subscribeComponent(componentClass, c);
         this.components.push(c);
 

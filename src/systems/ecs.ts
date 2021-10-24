@@ -1,24 +1,26 @@
-import { Component, ComponentClass } from '../component';
+import { Component, ComponentClass, ComponentMethodParams } from '../component';
 import { Entity } from '../entity';
 import { InputChannel } from '../inputChannel';
 import { getUTCSeconds, quickError, quickWarn } from '../utils';
-import { ComponentArrayItem, ComponentOptions, ComponentRow, LocalArgs, Time } from './ecsTypes';
+import { ComponentArrayItem, ComponentOptions, ComponentRow, LocalArgs } from './ecsTypes';
+import { Time } from '../time';
 
 export abstract class ECS
 {
+    static defaultInputChannelName = '__default__';
+
     protected entities = new Map<string, Entity>();
     protected components: ComponentRow[] = [];
     protected defaultComponents: ComponentClass<Component>[] = [];
 
     /** @internal */
     private inputChannels = new Map<string, InputChannel>();
-    private defaultInputChannel;
+    private defaultInputChannel: InputChannel;
 
-    private _time;
-    get deltaTime() { return this._time.dt; }
-    get currentTime() { return this._time.current; }
-    get starTime() { return this._time.start; }
-    get totalTime() { return this._time.total; }
+    protected _time = new Time();
+
+    /** @internal */
+    defaultComponentProperties;
 
     constructor(
         componentList: ComponentArrayItem[], 
@@ -61,15 +63,24 @@ export abstract class ECS
             }
         }
         
-        let currentTime = getUTCSeconds();
-        this._time = {
-            dt: 0.1,
-            total: 0,
-            current: currentTime,
-            start: currentTime,
-        } as Time;
+        this.defaultInputChannel = this.createInputChannel(ECS.defaultInputChannelName);
 
-        this.defaultInputChannel = this.createInputChannel('default');
+        // detect default component properties
+        let testEntity = new Entity(this, '');
+        let testComponent = new Component(this, testEntity);
+        this.defaultComponentProperties = Object.keys(testComponent);
+    }
+
+    /** @internal */
+    getComponentMethodParams()
+    {
+        const methodParams: ComponentMethodParams = 
+        {
+            time: this._time,
+            localArgs: this.localArgs
+        };
+
+        return methodParams;
     }
 
     /** @internal */
@@ -159,7 +170,7 @@ export abstract class ECS
     {
         if (obj instanceof Component)
         {
-            obj.onDestroy(this.localArgs);
+            obj.onDestroy(this.getComponentMethodParams());
             obj.isDestroyed = true;
 
             let constructorFunction = Object.getPrototypeOf(obj).constructor;
@@ -182,21 +193,29 @@ export abstract class ECS
         }
     }
 
-    /** @internal */
     createInputChannel(id: string)
     {
+        if (this.defaultInputChannel && id === ECS.defaultInputChannelName)
+        {
+            return this.defaultInputChannel;
+        }
+
         let channel = new InputChannel(id);
+
         this.inputChannels.set(id, channel);
         return channel;
     }
 
-    /** @internal */
     removeInputChannel(id: string)
     {
+        if (this.getInputChannel(id) === this.getDefaultInputChannel())
+        {
+            return quickError('Default input channel cannot be deleted', false);
+        }
+
         return this.inputChannels.delete(id);
     }
 
-    /** @internal */
     getInputChannel(id: string)
     {
         return this.inputChannels.get(id);
@@ -207,51 +226,60 @@ export abstract class ECS
         return this.defaultInputChannel;
     }
 
-    update(runStart: boolean, runUpdate: boolean, runRender: boolean)
-    {
-        // time
-        let currTime = getUTCSeconds();
-        this._time.total = currTime - this._time.start;
-        this._time.dt = currTime - this._time.current;
-        this._time.current = currTime;
+    // update(runStart: boolean, runUpdate: boolean, runInterpolate: boolean, runRender: boolean)
+    // {
+    //     // time
+    //     let currTime = getUTCSeconds();
+    //     this._time.total = currTime - this._time.start;
+    //     this._time.dt = currTime - this._time.current;
+    //     this._time.current = currTime;
 
-        if (runStart)
-        {
-            for (const componentRow of this.components)
-            {
-                for (let component of componentRow.instances)
-                {
-                    if (!component.hasRunStart)
-                    {
-                        component.start(this.localArgs);
-                        component.hasRunStart = true;
-                    }
-                }
-            }
-        }
+    //     if (runStart)
+    //     {
+    //         for (const componentRow of this.components)
+    //         {
+    //             for (let component of componentRow.instances)
+    //             {
+    //                 if (!component.hasRunStart)
+    //                 {
+    //                     component.start(this.localArgs);
+    //                     component.hasRunStart = true;
+    //                 }
+    //             }
+    //         }
+    //     }
 
-        if (runUpdate)
-        {
-            for (const componentRow of this.components)
-            {
-                for (let component of componentRow.instances)
-                {
-                    component.update(this.localArgs);
-                }
-            }
-        }
+    //     if (runUpdate)
+    //     {
+    //         for (const componentRow of this.components)
+    //         {
+    //             for (let component of componentRow.instances)
+    //             {
+    //                 component.update(this.localArgs);
+    //             }
+    //         }
+    //     }
 
-        if (runRender)
-        {
-            for (const componentRow of this.components)
-            {
-                for (let component of componentRow.instances)
-                {
-                    component.render(this.localArgs);
-                }
-            }
-        }
+    //     if (runInterpolate)
+    //     {
+    //         for (const componentRow of this.components)
+    //         {
+    //             for (let component of componentRow.instances)
+    //             {
+    //                 component.interpolateState(this.localArgs);
+    //             }
+    //         }
+    //     }
 
-
-    }
+    //     if (runRender)
+    //     {
+    //         for (const componentRow of this.components)
+    //         {
+    //             for (let component of componentRow.instances)
+    //             {
+    //                 component.render(this.localArgs);
+    //             }
+    //         }
+    //     }
+    // }
 }

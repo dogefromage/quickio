@@ -2,9 +2,15 @@ import { ECS } from './systems/ecs';
 import { Entity } from './entity';
 import { InputChannel } from './inputChannel';
 import { quickError, quickWarn } from './utils';
-import { LocalArgs, Time } from './systems/ecsTypes';
+import { LocalArgs } from './systems/ecsTypes';
+import { calculateStateGradient, integrateState } from './componentState';
+import { Time } from './time';
 
-const DEFAULT_STATE_BUFFER_SIZE = 2;
+export interface ComponentMethodParams
+{
+    time: Time;
+    localArgs?: LocalArgs;
+}
 
 type SerializableType = string | number | ComponentState;
 
@@ -35,6 +41,26 @@ export interface CustomSyncProperty
 
 type SyncProperty = string | CustomSyncProperty;
 
+function validateSyncProperty(prop: SyncProperty)
+{
+    if (typeof(prop) === 'string')
+    {
+        return;
+    }
+
+    if (typeof(prop as CustomSyncProperty) === 'object')
+    {
+        if (!prop.hasOwnProperty('getProps') ||
+            !prop.hasOwnProperty('setProps'))
+        {
+            quickError("Objects as properties are only possible as CustomSyncProperties, which must include a getProps() and setProps function.", true);
+        }
+        return;
+    }
+
+    quickError('A sync property must be of type "string" or "CustomSyncProperty", which contains the methods "getProps" and "setProps"', true);
+}
+
 export type ComponentClass<T extends Component = Component> = 
     new (ecs: ECS, entity: Entity) => T;
 
@@ -42,6 +68,8 @@ export class Component
 {
     /** @internal */
     hasRunStart = false;
+    /** @internal */
+    hasRunInit = false;
 
     /** @internal */
     syncProperties: SyncProperty[] = [];
@@ -49,6 +77,12 @@ export class Component
     public isDestroyed;
 
     public input: InputChannel;
+
+    /** @internal */
+    stateGradient?: ComponentState;
+
+    /** @internal */
+    currentState?: ComponentState;
 
     /**
      * @ignore
@@ -62,22 +96,29 @@ export class Component
         this.isDestroyed = false;
     }
 
-    awake(localArgs: LocalArgs) {}
+    init(componentMethodParams: ComponentMethodParams) {}
 
-    start(localArgs: LocalArgs) {}
+    start(componentMethodParams: ComponentMethodParams) {}
 
-    update(localArgs: LocalArgs) {}
+    update(componentMethodParams: ComponentMethodParams) {}
 
-    render(localArgs: LocalArgs) {}
+    render(componentMethodParams: ComponentMethodParams) {}
 
-    onDestroy(localArgs: LocalArgs) {}
+    onDestroy(componentMethodParams: ComponentMethodParams) {}
 
-    setInputChannel(channelId: string)
+    useInputChannel(channel: InputChannel): void;
+    useInputChannel(channelId: string): void;
+    useInputChannel(obj: any)
     {
-        let channel = this.ecs.getInputChannel(channelId);
+        let channel = obj as InputChannel | undefined;
+        if (typeof(channel) === 'string')
+        {
+            channel = this.ecs.getInputChannel(obj);
+        }
+
         if (channel == null)
         {
-            quickWarn(`Input channel "${channelId}" did not exist. Current input channel used.`);
+            quickWarn(`Input channel "${obj}" did not exist. Current input channel used.`);
             return;
         }
         this.input = channel;
@@ -85,27 +126,40 @@ export class Component
 
     sync(...syncProperties: SyncProperty[])
     {
-        if (this.hasRunStart)
+        if (this.hasRunInit)
         {
-            quickError(`${this.sync.name}() can only be called before or during the start() method. This ensures that all variables stay in sync`, true);
+            quickError(`sync() can only be called from the init() method. This ensures that all variables stay in sync`, true);
         }
 
-        for (const syncProperty of syncProperties)
+        syncProperties.map(validateSyncProperty);
+
+        this.syncProperties = this.syncProperties.concat(syncProperties);
+    }
+
+    onServerState(serverState: ComponentState, dataIndex: number, serverTime: Time)
+    {
+        if (!this.currentState)
         {
-            if (typeof(syncProperty) === 'string')
-            {
-                this.syncProperties.push(syncProperty);
-            }
-    
-            if (typeof(syncProperty as CustomSyncProperty) === 'object')
-            {
-                if (!syncProperty.hasOwnProperty('getProps') ||
-                    !syncProperty.hasOwnProperty('setProps'))
-                {
-                    quickError("Objects as properties are only possible as CustomSyncProperties, which must include a getProps() and setProps function.", true);
-                }
-            }
+            this.currentState = serverState;
+            return;
         }
+
+        this.stateGradient = calculateStateGradient(this.currentState, serverState, serverTime.dtAverage);
+    }
+
+    interpolateState({ time }: ComponentMethodParams)
+    {
+        if (!this.currentState)
+        {
+            this.currentState = this.getState();
+        }
+
+        if (this.stateGradient)
+        {
+            this.currentState = integrateState(this.currentState, this.stateGradient, time.dt);
+        }
+
+        this.setState(this.currentState);
     }
 
     /**
@@ -205,15 +259,10 @@ export class Component
         if (true) // debug env
         {
             let propValue = (<any>this)[propertyName];
-            
-            if (propValue == null)
+        
+            if (propValue && typeof(propValue) !== typeof(value))
             {
-                quickError(`Component ${Object.getPrototypeOf(this).name} does not have a property named ${propertyName}.`, true);
-            }
-            
-            if (typeof(propValue) !== typeof(value))
-            {
-                quickError(`At component ${Object.getPrototypeOf(this).name}: Property type cannot be different from its initial state (initial type: ${typeof(propValue)}, passed value type: ${typeof(value)}).`, true);
+                quickWarn(`At component ${Object.getPrototypeOf(this).name}: Received value has different type from previous. (previous: ${typeof(propValue)}, new: ${typeof(value)}).`);
             }
         }
 
@@ -222,8 +271,6 @@ export class Component
 
     /**
      * Returns a component attached to the same entity or undefined if no component of this class exists.
-     * @param componentClass - Class of component.
-     * @returns component - component attached to the same entity.
      */
     getComponent<T extends Component>(componentClass: ComponentClass<T>)
     {

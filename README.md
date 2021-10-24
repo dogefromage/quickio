@@ -1,52 +1,3 @@
-
-
-
-
-
-
-```ts
-
-
-
-
-
-
-
-
-class Component
-{
-    Entity entity
-    ECS ecs
-}
-
-class Entity
-{
-    string id
-    List<Component> components
-}
-
-type ComponentRow<T extends Component> = {
-    component: new (...any[]) => T;
-    instances: Set<T>;
-    options?: {}    
-}
-
-class ECS
-{
-    List<ComponentRow> components
-    Map<id, Entity> entities
-    
-}
-
-```
-
-
-
-
-  
-
-# quickio
-
 >__quickio is still under development! Some features may still be missing...__
 <p>
 <p>
@@ -60,16 +11,16 @@ For quickio, it is recommended to understand NodeJS and npm. Also I highly advis
 
 If you are unsure on how to create a typescript or NodeJS application, check out the [quickio typescript starter project](https://github.com/dogefromage/quickio-starter-ts).
 
+Install using npm
 ```bash
-# download from npm
-npm install quickio
+npm i quickio -D
 ```
+Import with typescript
 ```ts
-// in your typescript file
 import * as quick from 'quickio';
 ```
+Require with nodejs
 ```js
-// with nodejs
 const quick = require('quickio');
 ```
 

@@ -1,14 +1,60 @@
-import { compressNumber, createCounter } from "../utils";
+import { ActiveComponent, Component, ComponentMethodParams, Entity } from "..";
+import { InputChannel, InputData } from "../inputChannel";
+import { compressNumber, createCounter, quickWarn } from "../utils";
 import { ECS } from "./ecs";
 import { ClientDataPacket, EntityUpdate, EntityUpdateTypes, ServerDataPacket } from "./ecsTypes";
 
 export class ServerECS extends ECS
 {
-    public dataIndexCounter = createCounter();
+    /** @internal */
+    dataIndexCounter = createCounter();
+    
+    /** @internal */
+    destroyedEntities = new Set<string>();
+
+    destroy(obj: Component): void;
+    destroy(obj: Entity): void;
+    destroy(obj: any)
+    {
+        super.destroy(obj);
+
+        if (obj instanceof Entity)
+        {
+            this.destroyedEntities.add(obj.id);
+        }
+    }
     
     update()
     {
-        super.update(true, true, false);
+        this._time.update();
+
+        const methodParams = this.getComponentMethodParams();
+
+        // START
+        for (const componentRow of this.components)
+        {
+            for (let component of componentRow.instances)
+            {
+                if (!component.hasRunStart)
+                {
+                    component.start(methodParams);
+                    component.hasRunStart = true;
+                }
+            }
+        }
+
+        for (const componentRow of this.components)
+        {
+            for (let component of componentRow.instances)
+            {
+                if (component instanceof ActiveComponent)
+                {
+                    component.activeUpdate(methodParams);
+                }
+
+                component.update(methodParams);
+            }
+        }
     }
 
     getData()
@@ -30,7 +76,7 @@ export class ServerECS extends ECS
 
                 if (!entityStatePairs)
                 {
-                    entityStatePairs = [ id, EntityUpdateTypes.Basic, [] ];
+                    entityStatePairs = [ id, EntityUpdateTypes.Update, [] ];
                     entitiesStates.set(id, entityStatePairs);
                 }
 
@@ -38,6 +84,12 @@ export class ServerECS extends ECS
                 entityStatePairs[2]!.push([ i, compState ]);
             }
         }
+
+        for (const id of this.destroyedEntities)
+        {
+            entitiesStates.set(id, [ id, EntityUpdateTypes.Destroyed ]);
+        }
+        this.destroyedEntities.clear();
 
         data.en = [ ...entitiesStates.values() ];
 
@@ -54,11 +106,21 @@ export class ServerECS extends ECS
         return dataJson;
     }
 
-    setClientData(clientDataJson: string)
+    setClientInput(clientId: string, input: InputData)
+    {
+        let channel = this.getInputChannel(clientId) as InputChannel;
+        if (channel == null) return quickWarn(`Server received input data from socket ${clientId}, but the corresponding input channel does not exist. Data was ignored.`);
+
+        channel.setDataAndUpdate(input);
+    }
+
+    onClientData(clientId: string, clientDataJson: string)
     {
         const clientData = JSON.parse(clientDataJson) as ClientDataPacket;
 
-        // IMPLEMENT
+        if (clientData.in)
+        {
+            this.setClientInput(clientId, clientData.in);
+        }
     }
 }
-

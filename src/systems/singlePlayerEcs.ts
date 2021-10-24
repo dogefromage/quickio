@@ -1,26 +1,54 @@
+import { ActiveComponent } from "..";
+import { BrowserECS } from "./browserEcs";
 import { ECS } from "./ecs";
 import { ComponentArrayItem, LocalArgs } from "./ecsTypes";
 
-export class SinglePlayerECS extends ECS
+export class SinglePlayerECS extends BrowserECS
 {
     constructor(componentList: ComponentArrayItem[], localArgs: LocalArgs)
     {
-        super(componentList, localArgs);
-
-        let defaultInputChannel = this.getDefaultInputChannel();
-        document.addEventListener('keydown', (e: KeyboardEvent) =>
-        {
-            defaultInputChannel.setKeyDown(e.keyCode);
-        });
-        document.addEventListener('keyup', (e: KeyboardEvent) =>
-        {
-            defaultInputChannel.setKeyUp(e.keyCode);
-        });
+        // will send input updates to default input channel
+        super(componentList, localArgs, ECS.defaultInputChannelName);
     }
 
     update()
     {
-        super.update(true, true, true);
+        this._time.update();
+
+        const methodParams = this.getComponentMethodParams();
+
+        for (const componentRow of this.components)
+        {
+            for (let component of componentRow.instances)
+            {
+                if (!component.hasRunStart)
+                {
+                    component.start(methodParams);
+                    component.hasRunStart = true;
+                }
+            }
+        }
+
+        for (const componentRow of this.components)
+        {
+            for (let component of componentRow.instances)
+            {
+                if (component instanceof ActiveComponent)
+                {
+                    component.activeUpdate(methodParams);
+                }
+
+                component.update(methodParams);
+            }
+        }
+
+        for (const componentRow of this.components)
+        {
+            for (let component of componentRow.instances)
+            {
+                component.render(methodParams);
+            }
+        }
     }
 }
 

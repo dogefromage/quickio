@@ -16,21 +16,9 @@ export type ComponentOptions = {
 export type ComponentArrayItem =
     ComponentClass | [ classConstructor: ComponentClass, options: ComponentOptions ];
 
-export type Time =
-{
-    /** Delta time between updates in seconds */
-    dt: number;
-    /** Current UTC time in seconds */
-    current: number;
-    /** Total time in seconds since program start */
-    total: number;
-    /** UTC time in seconds of start frame */
-    start: number;
-}
-
 export enum EntityUpdateTypes
 {
-    Basic,
+    Update,
     Destroyed,
     OutOfSight,
 };
