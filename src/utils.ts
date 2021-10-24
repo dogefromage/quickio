@@ -74,12 +74,15 @@ export function compressNumber(x: number, precision = 5)
 }
 
 /** @internal */
-export function* createCounter()
+export class Counter
 {
-    let i = 0;
-    while (true)
+    constructor(
+        public current = 0
+    ) {}
+
+    next()
     {
-        yield i++;
+        return ++this.current;
     }
 }
 

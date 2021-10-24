@@ -1,16 +1,43 @@
-import { ActiveComponent, Component, ComponentMethodParams, Entity } from "..";
+import { ActiveComponent, Component, ComponentMethodParams, Entity, quickError } from "..";
 import { InputChannel, InputData } from "../inputChannel";
 import { compressNumber, createCounter, quickWarn } from "../utils";
 import { ECS } from "./ecs";
 import { ClientDataPacket, EntityUpdate, EntityUpdateTypes, ServerDataPacket } from "./ecsTypes";
 
+export interface Client
+{
+    id: string,
+    lastDataIndex: number;
+}
+
 export class ServerECS extends ECS
 {
     /** @internal */
-    dataIndexCounter = createCounter();
-    
-    /** @internal */
     destroyedEntities = new Set<string>();
+
+    private clients = new Map<string, Client>();
+
+    createClient(clientId: string, dontCreateInputChannel = false)
+    {
+        let client: Client = 
+        {
+            id: clientId,
+            lastDataIndex: -1,
+        };
+
+        this.clients.set(clientId, client);
+        if (!dontCreateInputChannel) this.createInputChannel(clientId);
+    }
+
+    removeClient(clientId: string, keepInputChannel = false)
+    {
+        let client = this.clients.get(clientId);
+
+        if (!client) return quickWarn(`Client with id=${clientId} was not found.`);
+
+        this.clients.delete(client.id);
+        if (!keepInputChannel) this.removeInputChannel(client.id);
+    }
 
     destroy(obj: Component): void;
     destroy(obj: Entity): void;
@@ -57,12 +84,12 @@ export class ServerECS extends ECS
         }
     }
 
-    getData()
+    collectData(clientIdList: string[], callback: (clientId: string, data: string) => void)
     {
-        const data = 
+        const data: ServerDataPacket = 
         {
-            ix: this.dataIndexCounter.next().value,
-        } as ServerDataPacket;
+            ix: -1,
+        };
 
         let entitiesStates = new Map<string, EntityUpdate>();
 
@@ -93,34 +120,45 @@ export class ServerECS extends ECS
 
         data.en = [ ...entitiesStates.values() ];
 
-        const dataJson = JSON.stringify(data, (key, value) =>
+
+        for (const clientId of clientIdList)
         {
-            if (typeof(value) === 'number')
+            let client = this.clients.get(clientId);
+            
+            if (client && client.lastDataIndex > 0)
             {
-                return compressNumber(value);
+                data.ix = client.lastDataIndex;
             }
 
-            return value;
-        });
+            const dataJson = JSON.stringify(data, (key, value) =>
+            {
+                if (typeof(value) === 'number')
+                {
+                    return compressNumber(value);
+                }
+    
+                return value;
+            });
 
-        return dataJson;
-    }
-
-    setClientInput(clientId: string, input: InputData)
-    {
-        let channel = this.getInputChannel(clientId) as InputChannel;
-        if (channel == null) return quickWarn(`Server received input data from socket ${clientId}, but the corresponding input channel does not exist. Data was ignored.`);
-
-        channel.setDataAndUpdate(input);
+            callback(clientId, dataJson);
+        }
     }
 
     onClientData(clientId: string, clientDataJson: string)
     {
         const clientData = JSON.parse(clientDataJson) as ClientDataPacket;
 
-        if (clientData.in)
+        const client = this.clients.get(clientId);
+        if (!client) return quickError(`Client data was attempted to be set for client which did not exist (clientId=${clientId}).`);
+
+        client.lastDataIndex = clientData.ix;
+
+        if (clientData.in != null)
         {
-            this.setClientInput(clientId, clientData.in);
+            let channel = this.getInputChannel(clientId) as InputChannel;
+            if (channel == null) return quickWarn(`Client input was received for clientId=${clientId}, but the corresponding input channel did not exist. Data was ignored.`);
+    
+            channel.setDataAndUpdate(clientData.in);
         }
     }
 }

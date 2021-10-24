@@ -14,7 +14,7 @@ export interface InputConfiguration
  */
 export abstract class BrowserECS extends ECS
 {
-    protected localInputChannel;
+    protected mainInputChannel;
     
     private _inputConfig: InputConfiguration = {
         recordKeys: [ 
@@ -35,7 +35,7 @@ export abstract class BrowserECS extends ECS
     {
         super(componentList, localArgs);
 
-        this.localInputChannel = this.createInputChannel(localInputChannelId);
+        this.mainInputChannel = this.createInputChannel(localInputChannelId);
 
         document.addEventListener('keydown', e => this.handleKeyDown(e));
         document.addEventListener('keyup', e => this.handleKeyUp(e));
@@ -47,7 +47,7 @@ export abstract class BrowserECS extends ECS
     {
         if (this.inputConfig.recordKeys.includes(e.keyCode))
         {
-            this.localInputChannel.setKeyUp(e.keyCode);
+            this.mainInputChannel.setKeyUp(e.keyCode);
         }
     }
 
@@ -56,7 +56,7 @@ export abstract class BrowserECS extends ECS
     {
         if (this.inputConfig.recordKeys.includes(e.keyCode))
         {
-            this.localInputChannel.setKeyDown(e.keyCode);
+            this.mainInputChannel.setKeyDown(e.keyCode);
         }
     }
 

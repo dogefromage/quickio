@@ -1,6 +1,7 @@
 import { ActiveComponent } from "..";
+import { InputChannel } from "../inputChannel";
 import { Time } from "../time";
-import { compressNumber } from "../utils";
+import { compressNumber, Counter } from "../utils";
 import { BrowserECS } from "./browserEcs";
 import { ClientDataPacket, ComponentArrayItem, EntityUpdateTypes, LocalArgs, ServerDataPacket } from "./ecsTypes";
 
@@ -8,6 +9,12 @@ export class ClientECS extends BrowserECS
 {
     /** @internal */
     serverTime = new Time();
+
+    /** @internal */
+    dataIndexCounter = new Counter();
+
+    /** @internal */
+    private secondaryInputChannel = new InputChannel('__secondary__');
 
     constructor(
         componentList: ComponentArrayItem[],
@@ -78,7 +85,7 @@ export class ClientECS extends BrowserECS
                     let comp = entity.getComponent(row.componentClass);
                     if (!comp) comp = entity.addComponent(row.componentClass);
     
-                    comp.onServerState(componentState, -1, this.serverTime);
+                    comp.onServerState(componentState, serverData.ix, this.serverTime);
                 }
             }
             else if (updateType === EntityUpdateTypes.Destroyed)
@@ -96,12 +103,14 @@ export class ClientECS extends BrowserECS
         const clientData = {} as ClientDataPacket;
         
         // get input data
-        const input = this.localInputChannel.getDataAndUpdate();
+        const input = this.mainInputChannel.getDataAndUpdate();
         if (input != null) clientData.in = input;
 
         // only send data if there's something to send
         if (Object.entries(clientData).length > 0)
         {
+            clientData.ix = this.dataIndexCounter.next();
+
             return JSON.stringify(clientData, (key, value) =>
             {
                 if (typeof(value) === 'number')
