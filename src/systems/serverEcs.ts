@@ -1,6 +1,6 @@
 import { ActiveComponent, Component, ComponentMethodParams, Entity, quickError } from "..";
 import { InputChannel, InputData } from "../inputChannel";
-import { compressNumber, createCounter, quickWarn } from "../utils";
+import { compressNumber, quickWarn } from "../utils";
 import { ECS } from "./ecs";
 import { ClientDataPacket, EntityUpdate, EntityUpdateTypes, ServerDataPacket } from "./ecsTypes";
 
