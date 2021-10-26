@@ -2,18 +2,33 @@ import { ECS } from './systems/ecs';
 import { Entity } from './entity';
 import { InputChannel } from './inputChannel';
 import { quickError, quickWarn } from './utils';
-import { LocalArgs } from './systems/ecsTypes';
 import { calculateStateGradient, integrateState } from './componentState';
 import { Time } from './time';
 
+/**
+ * This interface is used to describe the parameters of the following overloadable methods on a component.
+ * {@link Component.init} 
+ * {@link Component.start} 
+ * {@link Component.update} 
+ * {@link Component.render} 
+ * {@link Component.onDestroy} 
+ */
 export interface ComponentMethodParams
 {
+    /**
+     * This property will always contain the current time information.
+     */
     time: Time;
-    localArgs?: LocalArgs;
+    /**
+     * This property will get set to the localArgs, which you passed into the constructor of the current ecs system. This allows you to send different local args to different systems, even if they use the same component.
+     * For example: You can retrieve information like the html5 canvas context from your local args inside of the {@link Component.render} method even though the file will also run somewhere on the server, where the render() method is not called.
+     */
+    localArgs?: object;
 }
 
 type SerializableType = string | number | ComponentState;
 
+/** @internal */
 export type ComponentState = SerializableType[];
 
 function isSerializable(value: SerializableType)
@@ -33,13 +48,41 @@ function isSerializable(value: SerializableType)
     return typeof(value) === 'number' || typeof(value) === 'string';
 }
 
+/**
+ * A custom sync property can be used if {@link Component.sync} alone doesn't suit your purpose.
+ * It should be an object containing two methods, ***getProps()*** and ***setProps()***, which can be used the following way.
+ * 
+ * ```ts
+ * let myVector = {
+ *     x: 1, y: 2, z: 3,
+ * };
+ * 
+ * 
+ * let syncVector = {
+ *     getProps: () => {
+ *         return [ myVector.x, myVector.y, myVector.z ];
+ *     },
+ *     setProps: (state: ComponentState) => {
+ *         myVector.x = state[0];
+ *         myVector.y = state[1];
+ *         myVector.z = state[2];
+ *     }
+ * }
+ * 
+ * // inside Component.init()
+ * this.sync(syncVector); // add the pattern
+ * 
+ * ```
+ * 
+ * Why do I have to do this? Simple - Objects should be compressed as much as possible to safe bandwidth when sending data over the network. Quickio currently converts all data into JSON, which takes up more bytes for objects compared to simple arrays. Quickio also compressed floats down to less decimal points to reduce further unnessessary data.
+ */
 export interface CustomSyncProperty
 {
     getProps: () => ComponentState,
     setProps: (state: ComponentState) => void,
 }
 
-type SyncProperty = string | CustomSyncProperty;
+export type SyncProperty = string | CustomSyncProperty;
 
 function validateSyncProperty(prop: SyncProperty)
 {
@@ -61,9 +104,47 @@ function validateSyncProperty(prop: SyncProperty)
     quickError('A sync property must be of type "string" or "CustomSyncProperty", which contains the methods "getProps" and "setProps"', true);
 }
 
+/** 
+ * This type destribes the type of a component prototype.
+ */
 export type ComponentClass<T extends Component = Component> = 
     new (ecs: ECS, entity: Entity) => T;
 
+/**
+ * The Component class is where the magic happens. However, this class cannot be used in this form.
+ * It should only be used to inherit from when building your custom components.
+ * 
+ * In an entity component system, components are always attached to an entity, therefore they cannot be nested.
+ * 
+ * ```ts
+ * 
+ * class MyComponent extends Component
+ * {
+ *     start()
+ *     {
+ *         // access the entity component system
+ *         this.ecs
+ * 
+ *         // access the entity holding this component
+ *         this.entity
+ * 
+ *         // your code here...
+ *     }
+ * }
+ * 
+ * ```
+ * 
+ * Components always feature the following emtpy method templates, which can be overwritten by your component. These methods will get called depending on situtation or environment:
+ * 
+ * {@link Component.init}\
+ * {@link Component.start}\
+ * {@link Component.update}\
+ * {@link Component.render}
+ * 
+ * There also exist certain methods which will get called in special occasions.
+ * 
+ * {@link Component.onDestroy}
+ */
 export class Component
 {
     /** @internal */
@@ -96,12 +177,24 @@ export class Component
         this.isDestroyed = false;
     }
 
+    /**
+     * This method will **always** get called immediatly after instantiation of the component. Here, you should add all sync properties using <code>this.sync()</code>.
+     */
     init(componentMethodParams: ComponentMethodParams) {}
 
+    /**
+     * The start method will get called once during the update function of your authorative entity component system. If you are using an authorative server, which sends data to clients, the start method **will only run on components on the server**.
+     */
     start(componentMethodParams: ComponentMethodParams) {}
 
+    /**
+     * The update method will run every update cycle of your authorative entity component system. If you are using an authorative server, which sends data to clients, the update method **will only run on components on the server**.
+     */
     update(componentMethodParams: ComponentMethodParams) {}
 
+    /**
+     * The render method will be called at the end of every update cycle of your ECS. It **will only run on ECS' inside of your browser**. 
+     */
     render(componentMethodParams: ComponentMethodParams) {}
 
     onDestroy(componentMethodParams: ComponentMethodParams) {}

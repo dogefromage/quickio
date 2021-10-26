@@ -49,4 +49,5 @@ export type ClientDataPacket =
     in?: InputData,
 }
 
+/** @internal */
 export type LocalArgs = object;

@@ -136,7 +136,7 @@ export abstract class ECS
 
         return [ ...(<Set<T>>row.instances) ];
     }
-    
+
     createEntity(id?: string)
     {
         if (id == null)
@@ -153,6 +153,11 @@ export abstract class ECS
         this.entities.set(id, entity);
 
         return entity;
+    }
+
+    getEntityById(id: string)
+    {
+        return this.entities.get(id);
     }
 
     destroyEntityById(id: string)

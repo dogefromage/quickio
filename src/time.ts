@@ -1,12 +1,37 @@
 import { lerp } from ".";
 import { getUTCSeconds } from "./utils";
 
+/**
+ * Use this class only inside of components, where it is passed using {@link ComponentMethodParams}.
+ * 
+ * ```ts
+ * // time difference in seconds between this and last frame (stands for deltaTime)
+ * time.dt;
+ * 
+ * // a rolling average of time.dt to avoid unwanted spikes
+ * time.dtAverage;
+ * 
+ * // the current time in UTC seconds
+ * time.current;
+ * 
+ * // the start time in UTC seconds
+ * time.start;
+ * 
+ * // the total time in seconds since the start of the program
+ * time.total;
+ * ```
+ */
 export class Time
 {
+    /** @internal */
     private _dt;
+    /** @internal */
     private _total;
+    /** @internal */
     private _current;
+    /** @internal */
     private _start;
+    /** @internal */
     private _dtAverage;
 
     get dt() { return this._dt; }
