@@ -4,7 +4,55 @@
 
 ## Hello user, <p>  
 
-Quickio is a javascript/typescript game engine which runs inside of the browser. It is based on an [entity-component-system](https://en.wikipedia.org/wiki/Entity_component_system) like Unity3d. If you are already experienced in unity, quickio should be no problem for you. In the future, I am aiming to make quickio into a multiplayer engine to make it an easy way to create your own io-style game.
+Quickio is a javascript/typescript implementation of an [entity-component-system](https://en.wikipedia.org/wiki/Entity_component_system). 
+It allowes you to write custom components which can be attached to entities in your game or other usecases. 
+#### The fun part: 
+Quickio **synchronizes** variables inside your components between server and client, like in traditional [game networking](https://www.gabrielgambetta.com/client-server-game-architecture.html). 
+If configured correctly, quickio will predict the movement of objects using a clients input and [predict](https://www.gabrielgambetta.com/client-side-prediction-server-reconciliation.html) the calculations of the server to hide server latency.
+
+In quickio write a single class describing a component. Depending on the environment of this component (running on the server or client), quickio will execute different methods.
+
+```ts
+// using typescript
+
+class MyComponent extends quick.Component
+{
+    // use the exclamation mark to tell typescript that this value will be initialized later
+    public x!; 
+
+    // will run on server and client after instantiation of your component
+    init()
+    {
+        // synchronizes this value between server and client
+        this.sync('x');
+    }
+
+    // will run once, only on server
+    start()
+    {
+        this.x = 5;
+    }
+
+    // will run repeatedly on server
+    update()
+    {
+        this.x += 0.1;
+    }
+
+    // will run repeatedly on client
+    render()
+    {
+        console.log(this.x);
+
+        // by default, quickio will interpolate numerical values between server updates, 
+        // if the clients fps is higher than the servers update rate
+    }
+}
+
+```
+
+
+If you are already experienced in unity, quickio should be no problem for you. In the future, I am aiming to make quickio into a multiplayer engine to make it an easy way to create your own io-style game.
 
 ## Setup
 For quickio, it is recommended to understand NodeJS and npm. Also I highly advise you to use typescript for your development, since it makes debugging a lot easier. Also the strong-ish typed style will make your script perform better inside your browser. 
@@ -84,7 +132,7 @@ class MyComponent extends quick.Component
 	
 	update()
 	{
-		// update() will run repeatitly every frame.
+		// update() will run repeatedly every frame.
 	}
 }
 

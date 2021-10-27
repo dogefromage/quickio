@@ -1,5 +1,7 @@
 lib/
 
+serveDocs.js
+
 .replit
 
 package-lock.json
