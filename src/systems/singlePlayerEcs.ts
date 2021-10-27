@@ -1,14 +1,13 @@
-import { ActiveComponent } from "..";
-import { BrowserECS } from "./browserEcs";
+import { InputChannel } from "..";
 import { ECS } from "./ecs";
 import { ComponentArrayItem, LocalArgs } from "./ecsTypes";
 
-export class SinglePlayerECS extends BrowserECS
+export class SinglePlayerECS extends ECS
 {
     constructor(componentList: ComponentArrayItem[], localArgs: LocalArgs)
     {
         // will send input updates to default input channel
-        super(componentList, localArgs, ECS.defaultInputChannelName);
+        super(componentList, localArgs);
     }
 
     update()
@@ -33,12 +32,15 @@ export class SinglePlayerECS extends BrowserECS
         {
             for (let component of componentRow.instances)
             {
-                if (component instanceof ActiveComponent)
-                {
-                    component.activeUpdate(methodParams);
-                }
-
                 component.update(methodParams);
+            }
+        }
+
+        for (const componentRow of this.components)
+        {
+            for (let component of componentRow.instances)
+            {
+                component.animate(methodParams);
             }
         }
 

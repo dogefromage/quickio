@@ -4,6 +4,7 @@ import { InputChannel } from './inputChannel';
 import { quickError, quickWarn } from './utils';
 import { calculateStateGradient, integrateState } from './componentState';
 import { Time } from './time';
+import { InputQueueItem } from '.';
 
 /**
  * This interface is used to describe the parameters of the following overloadable methods on a component.
@@ -188,6 +189,11 @@ export class Component
     start(componentMethodParams: ComponentMethodParams) {}
 
     /**
+     * gagi
+     */
+    animate(componentMethodParams: ComponentMethodParams) {}
+
+    /**
      * The update method will run every update cycle of your authorative entity component system. If you are using an authorative server, which sends data to clients, the update method **will only run on components on the server**.
      */
     update(componentMethodParams: ComponentMethodParams) {}
@@ -228,8 +234,31 @@ export class Component
 
         this.syncProperties = this.syncProperties.concat(syncProperties);
     }
+    
+    /** @internal */
+    onServerStateActive(serverState: ComponentState, remainingInputQueue: InputQueueItem[], methodParams: ComponentMethodParams)
+    {
+        // set initial state
+        this.setState(serverState);
 
-    onServerState(serverState: ComponentState, dataIndex: number, serverTime: Time)
+        this.input.save();
+
+        // simulate forwards
+        for (let i = 0; i < remainingInputQueue.length; i++)
+        {
+            let queueItem = remainingInputQueue[i];
+
+            this.input.setDataAndUpdate(queueItem.input);
+
+            methodParams.time = queueItem.time;
+            this.animate(methodParams);
+        }
+
+        this.input.restore();
+    }
+
+    /** @internal */
+    onServerStatePassive(serverState: ComponentState, serverTime: Time)
     {
         if (!this.currentState)
         {
@@ -240,7 +269,8 @@ export class Component
         this.stateGradient = calculateStateGradient(this.currentState, serverState, serverTime.dtAverage);
     }
 
-    interpolateState({ time }: ComponentMethodParams)
+    /** @internal */
+    interpolate({ time }: ComponentMethodParams)
     {
         if (!this.currentState)
         {
@@ -255,10 +285,7 @@ export class Component
         this.setState(this.currentState);
     }
 
-    /**
-     * This method is used internally to pack all sync-properties into an array in the order in which they where assigned. This method can be overwritten or the output can be modified using super.getState().
-     * @returns Array of serialized sync vars
-     */
+    /** @internal */
     getState(): ComponentState
     {
         let state: ComponentState = [];
@@ -297,6 +324,7 @@ export class Component
         return state;
     }
 
+    /** @internal */
     setState(state: ComponentState) : void
     {
         let pointer = 0;

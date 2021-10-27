@@ -1,5 +1,5 @@
-import { ActiveComponent, Component, ComponentMethodParams, Entity, quickError } from "..";
-import { InputChannel, InputData } from "../inputChannel";
+import { Component, Entity, quickError } from "..";
+import { InputChannel } from "../inputChannel";
 import { compressNumber, quickWarn } from "../utils";
 import { ECS } from "./ecs";
 import { ClientDataPacket, EntityUpdate, EntityUpdateTypes, ServerDataPacket } from "./ecsTypes";
@@ -57,7 +57,6 @@ export class ServerECS extends ECS
 
         const methodParams = this.getComponentMethodParams();
 
-        // START
         for (const componentRow of this.components)
         {
             for (let component of componentRow.instances)
@@ -74,12 +73,15 @@ export class ServerECS extends ECS
         {
             for (let component of componentRow.instances)
             {
-                if (component instanceof ActiveComponent)
-                {
-                    component.activeUpdate(methodParams);
-                }
-
                 component.update(methodParams);
+            }
+        }
+
+        for (const componentRow of this.components)
+        {
+            for (let component of componentRow.instances)
+            {
+                component.animate(methodParams);
             }
         }
     }

@@ -11,6 +11,7 @@
   ],
   "scripts": {
     "build": "tsc",
+    "dev": "tsc --watch",
     "docs": "typedoc --watch --hideGenerator --disableSources --includeVersion --sort source-order --darkHighlightTheme github-dark --lightHighlightTheme github-light",
     "serve-docs": "nodemon ./serveDocs.js"
   },

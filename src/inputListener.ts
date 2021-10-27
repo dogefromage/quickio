@@ -1,7 +1,4 @@
-import { setUncaughtExceptionCaptureCallback } from "process";
-import { KeyCodes } from "../utils";
-import { ECS } from "./ecs"
-import { ComponentArrayItem, LocalArgs } from "./ecsTypes";
+import { InputChannel, KeyCodes } from "."
 
 export interface InputConfiguration
 {
@@ -9,12 +6,19 @@ export interface InputConfiguration
     recordMouse: boolean,
 };
 
-/**
- * @hidden
- */
-export abstract class BrowserECS extends ECS
+export class InputListener
 {
-    protected mainInputChannel;
+    private channels = new Set<InputChannel>();
+    
+    addChannel(channel: InputChannel)
+    {
+        return this.channels.add(channel);
+    }
+
+    removeChannel(channel: InputChannel)
+    {
+        return this.channels.delete(channel);
+    }
     
     private _inputConfig: InputConfiguration = {
         recordKeys: [ 
@@ -27,40 +31,29 @@ export abstract class BrowserECS extends ECS
         return this._inputConfig;
     }
 
-    constructor(
-        componentList: ComponentArrayItem[],
-        localArgs: LocalArgs,
-        localInputChannelId: string,
-    )
+    constructor() 
     {
-        super(componentList, localArgs);
-
-        this.mainInputChannel = this.createInputChannel(localInputChannelId);
-
         document.addEventListener('keydown', e => this.handleKeyDown(e));
         document.addEventListener('keyup', e => this.handleKeyUp(e));
         document.addEventListener('mousemove', e => this.handleMouseMove(e));
     }
 
-    /** @internal */
     handleKeyUp(e: KeyboardEvent)
     {
         if (this.inputConfig.recordKeys.includes(e.keyCode))
         {
-            this.mainInputChannel.setKeyUp(e.keyCode);
+            this.channels.forEach(c => c.setKeyUp(e.keyCode));
         }
     }
 
-    /** @internal */
     handleKeyDown(e: KeyboardEvent)
     {
         if (this.inputConfig.recordKeys.includes(e.keyCode))
         {
-            this.mainInputChannel.setKeyDown(e.keyCode);
+            this.channels.forEach(c => c.setKeyDown(e.keyCode));
         }
     }
 
-    /** @internal */
     handleMouseMove(e: MouseEvent)
     {
         if (this.inputConfig.recordMouse)

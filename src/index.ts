@@ -7,7 +7,6 @@ export * from './systems/serverEcs';
 export * from './entity';
 export * from './component';
 export * from './componentState';
-export * from './activeComponent';
 export * from './utils';
 export * from './time';
 export * from './inputChannel';
