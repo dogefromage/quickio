@@ -1,11 +1,11 @@
 import { KeyCodes, quickError } from "./utils";
 
-type KeyData = 
+export type KeyData = 
 {
     isPressed: boolean;
 }
 
-type KeyCode = number;
+export type KeyCode = number;
 
 export type InputData =
 {

@@ -3,6 +3,7 @@ lib/
 serveDocs.js
 
 .replit
+.breakpoints
 
 package-lock.json
 
