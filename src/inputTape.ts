@@ -1,23 +1,13 @@
+import { runInThisContext } from "vm";
 import { KeyCode, KeyData } from "./inputChannel";
-
-export interface InputDelta
-{
-    keys?: [
-        on: KeyCode[],
-        off: KeyCode[],
-        triggers: KeyCode[],
-    ]
-};
 
 export interface InputData
 {
-    timeStamp: number;
-    pressedKeys?: KeyCode[];
-}
-
-function searchTimeStamp(tape: Array<InputData>, regionStart: number, regionEnd: number)
-{
-    
+    /** start time */
+    st: number;
+    /** delta time */
+    dt: number;
+    keys?: number[];
 }
 
 export class InputTape
@@ -54,15 +44,75 @@ export class InputTape
         this.inputTape[this.tapeHead] = input;
     }
 
-    calculateDelta(startTime: number, endTime?: number)
+    /**
+     * Returns entry with the closest time stamp smaller than the time passed as argument
+     */
+    searchByTime(time: number)
     {
-        let inputDelta: InputDelta = 
+        let lastIndex = -1;
+        for (let i = 0; i < this.tapeLength; i++)
         {
-            keys: [ [], [], [] ]
+            let index = this.tapeHead - i;
+            while (index < 0) index += this.tapeLength;
+            
+            let data = this.inputTape[index];
+
+            if (!data) { return lastIndex; }
+
+            if (data.st < time)
+            {
+                return index;
+            }
+
+            lastIndex = index;
         }
 
-        
+        return lastIndex;
+    }
 
-        return inputDelta;
+    getInputFromTimeSpan(startTime: number, endTime?: number): InputData
+    {
+        let keyMap = new Map<number, number>();
+
+        let totalDuration = 0;
+
+        let endIndex = this.tapeEnd;
+        if (endTime)
+        {
+            endIndex = this.searchByTime(endTime);
+        }
+        let startIndex = this.searchByTime(startTime);
+
+        while (endIndex < startIndex) endIndex += this.tapeLength; 
+
+        for (let i = startIndex; i < endIndex; i++)
+        {
+            let data = this.inputTape[i % this.tapeLength];
+            if (!data) continue;
+            
+            totalDuration += data.dt;
+            if (!data.keys) continue;
+
+            for (let i = 0; i < data.keys.length; i += 2)
+            {
+                let key = data.keys[i];
+                let factor = data.keys[i + 1] * data.dt;
+
+                keyMap.set(key, 
+                    (keyMap.get(key) || 0) + factor);
+            }
+        }
+
+        let keys = [];
+        for (const [ key, factor ] of keyMap)
+        {
+            keys.push(key, factor / totalDuration);
+        }
+
+        return {
+            st: startTime,
+            dt: totalDuration,
+            keys
+        };
     }
 }
