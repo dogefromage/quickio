@@ -19,6 +19,9 @@ import { getUTCSeconds } from "./utils";
  * 
  * // the total time in seconds since the start of the program
  * time.total;
+ * 
+ * // the last update time in UTC seconds
+ * time.last;
  * ```
  */
 export class Time
@@ -33,12 +36,15 @@ export class Time
     private _start;
     /** @internal */
     private _dtAverage;
+    /** @internal */
+    private _last;
 
     get dt() { return this._dt; }
     get current() { return this._current; }
     get start() { return this._start; }
     get total() { return this._total; }
     get dtAverage() { return this._dtAverage; }
+    get last() { return this._last; }
 
     constructor(startTime = getUTCSeconds())
     {
@@ -47,13 +53,17 @@ export class Time
         this._total = 0;
         this._dt = 0.05;
         this._dtAverage = 0.05;
+        this.__last = 0;
     }
 
     update(timeAtUpdate = getUTCSeconds())
     {
-        this._total = timeAtUpdate - this._start;
-        this._dt = timeAtUpdate - this._current;
+        if (timeAtUpdate < this._current) quickError(`New time cannot be older than current time`);
+
+        this._last = this._current;
         this._current = timeAtUpdate;
+        this._dt = this._current - this._last;
+        this._total = this._current - this._start;
         this._dtAverage = lerp(this._dtAverage, this._dt, 0.3);
     }
 
@@ -66,6 +76,7 @@ export class Time
         copy._current = this._current;
         copy._start = this._start;
         copy._dtAverage = this._dtAverage;
+        copy._last = this._last;
 
         return copy;
     }

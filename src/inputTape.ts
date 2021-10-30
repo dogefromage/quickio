@@ -1,7 +1,6 @@
-import { runInThisContext } from "vm";
 import { KeyCode, KeyData } from "./inputChannel";
 
-export interface InputData
+export interface InputSlice
 {
     /** start time */
     st: number;
@@ -12,7 +11,7 @@ export interface InputData
 
 export class InputTape
 {
-    private inputTape: Array<InputData | null>;
+    private inputTape: Array<InputSlice | null>;
 
     private _tapeHead = 0;
     private get tapeHead()
@@ -34,11 +33,11 @@ export class InputTape
     )
     {
         this.inputTape = 
-            new Array<InputData | null>(tapeLength)
+            new Array<InputSlice | null>(tapeLength)
                 .fill(null);
     }
 
-    write(input: InputData)
+    write(input: InputSlice)
     {
         this.tapeHead++;
         this.inputTape[this.tapeHead] = input;
